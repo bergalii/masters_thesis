@@ -15,8 +15,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 from torchvision.transforms import Compose
 import random
 
-train_dir = "/content/drive/MyDrive/SurgicalActions160 Dataset/train"
-val_dir = "/content/drive/MyDrive/SurgicalActions160 Dataset/valid"
+train_dir = "PATH_TO_YOUR_DATASET"
+val_dir = "PATH_TO_YOUR_DATASET"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 batch_size = 1
 num_classes = len(os.listdir(train_dir))  # Number of class folders
@@ -38,7 +38,7 @@ class VideoDataset(Dataset):
             ]
         )
 
-        self.transform = transform = A.ReplayCompose(
+        self.transform = A.ReplayCompose(
             [
                 A.OneOf(
                     [
