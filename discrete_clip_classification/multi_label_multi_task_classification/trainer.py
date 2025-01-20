@@ -3,6 +3,7 @@ from torch.optim import SGD
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 import torch.nn.functional as F
 import torch.nn as nn
+import numpy as np
 from torchvision.models.video.swin_transformer import swin3d_t, Swin3D_T_Weights
 from sklearn.metrics import (
     average_precision_score,
@@ -16,11 +17,9 @@ class SelfDistillationTrainer:
     def __init__(
         self,
         num_epochs: int,
-        batch_size: int,
         train_loader,
         val_loader,
-        transition_matrix,
-        action_durations,
+        num_classes,
         device,
         warmup_epochs: int = 1,
         temperature: float = 2.0,
@@ -32,9 +31,7 @@ class SelfDistillationTrainer:
         self.temperature = temperature
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.transition_matrix = torch.FloatTensor(transition_matrix).to(device)
-        self.previous_prediction = None
-        self.action_durations = action_durations
+        self.num_classes = num_classes
         self.device = device
         # self.temperature = max(1.0, initial_temperature * (1 - epoch/num_epochs)) gradually increase temp
         self._configure_models()
@@ -55,7 +52,7 @@ class SelfDistillationTrainer:
                 nn.Linear(model.num_features, 512),
                 nn.GELU(),
                 nn.Dropout(p=0.3),
-                nn.Linear(512, NUM_CLASSES),
+                nn.Linear(512, self.num_classes),
             ).to(self.device)
 
         # Create teacher and student optimizers and schedulers
@@ -138,24 +135,14 @@ class SelfDistillationTrainer:
             model.train()
             epoch_loss = 0.0
 
-            for batch_idx, (inputs, labels, clip_lengths) in enumerate(
-                self.train_loader
-            ):
+            for batch_idx, (inputs, labels) in enumerate(self.train_loader):
                 inputs = inputs.to(self.device)
-                labels = labels.to(self.device)
+                labels = labels["verb"].to(self.device)
                 outputs = model(inputs)
                 if is_teacher:
                     # Default Loss
-                    classification_loss = F.binary_cross_entropy_with_logits(
-                        outputs, labels
-                    )
-                    transition_loss = self._compute_transition_loss(outputs)
-                    duration_loss = self._compute_duration_loss(outputs, clip_lengths)
-                    total_loss = (
-                        classification_loss
-                        + 0.1 * transition_loss
-                        + 0.1 * duration_loss
-                    )
+                    total_loss = F.binary_cross_entropy_with_logits(outputs, labels)
+
                 else:
                     # Distillation loss
                     soft_targets = soft_labels[
@@ -164,15 +151,7 @@ class SelfDistillationTrainer:
                         * self.train_loader.batch_size
                     ]
                     soft_targets = soft_targets.to(self.device)
-
-                    distill_loss = F.binary_cross_entropy_with_logits(
-                        outputs / self.temperature, soft_targets / self.temperature
-                    ) * (self.temperature * self.temperature)
-
-                    hard_loss = F.binary_cross_entropy_with_logits(outputs, labels)
-                    total_loss = (
-                        1 - self.alpha
-                    ) * hard_loss + self.alpha * distill_loss
+                    total_loss = F.binary_cross_entropy_with_logits(outputs, labels)
 
                 optimizer.zero_grad()
                 total_loss.backward()
@@ -191,59 +170,6 @@ class SelfDistillationTrainer:
             if val_map > best_map:
                 best_map = val_map
                 self._save_checkpoint(model, "best_model.pth", val_map)
-
-    def _compute_transition_loss(self, outputs: torch.Tensor):
-        """Compute loss based on transition probabilities"""
-
-        # Convert outputs to probabilities
-        current_probs = torch.sigmoid(outputs[0])
-        if self.previous_prediction is None:
-            self.previous_prediction = current_probs.detach()
-            return torch.tensor(0.0, device=outputs.device)
-
-        # Calculate expected probabilities for current prediction based on previous
-        expected_current = torch.matmul(
-            self.previous_prediction, self.transition_matrix
-        )
-
-        # Compute loss between expected and actual current probabilities
-        transition_loss = F.mse_loss(current_probs, expected_current)
-
-        # Update previous prediction for next time
-        self.previous_prediction = current_probs.detach()
-
-        return transition_loss
-
-    def _compute_duration_loss(
-        self, outputs: torch.Tensor, clip_lengths: List[int]
-    ) -> torch.Tensor:
-        """
-        Compute duration loss
-        """
-        probs = torch.sigmoid(outputs)
-        pred_labels = (probs > 0.7).cpu().numpy().astype(int)
-
-        batch_size = outputs.shape[0]
-        total_loss = torch.tensor(0.0, device=outputs.device)
-
-        for i in range(batch_size):
-            pred_tuple = tuple(pred_labels[i])
-            actual_length = clip_lengths[i]
-
-            if pred_tuple in self.action_durations:
-                expected_length = self.action_durations[pred_tuple]
-                # Compute relative error and clip to [0, 1]
-                duration_diff = min(
-                    abs(actual_length - expected_length) / expected_length, 1.0
-                )
-                total_loss = total_loss + duration_diff
-            else:
-                # total_loss = total_loss + 1.0  # Maximum penalty
-                # or skip
-                continue
-
-        # Average over batch size to keep scale similar to BCE
-        return total_loss / batch_size
 
     def _generate_soft_labels(self, teacher_model) -> torch.Tensor:
         """Generate soft labels using trained teacher model"""
@@ -270,11 +196,11 @@ class SelfDistillationTrainer:
         all_labels = []
 
         with torch.no_grad():
-            for inputs, labels, clip_lengths in self.val_loader:
+            for inputs, labels in self.val_loader:
                 inputs = inputs.to(self.self.device)
                 outputs = model(inputs)
                 all_outputs.append(outputs.cpu())
-                all_labels.append(labels.cpu())
+                all_labels.append(labels["verb"].cpu())
 
         outputs = torch.cat(all_outputs, dim=0)
         labels = torch.cat(all_labels, dim=0)

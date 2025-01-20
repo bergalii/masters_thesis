@@ -1,3 +1,15 @@
+from torchvision.transforms import Compose, ToTensor, Normalize, Resize
+from torchvision.transforms import Compose
+from torch.utils.data import Dataset
+import xml.etree.ElementTree as ET
+from collections import defaultdict
+from typing import List, Dict, Tuple
+import cv2
+import albumentations as A
+import numpy as np
+import torch
+import os
+
 class MultiLabelFrameDataset(Dataset):
     """
     Dataset class for handling frame-based data with multi-label annotations
@@ -8,6 +20,8 @@ class MultiLabelFrameDataset(Dataset):
         frames_dir: str,
         annotations_dir: str,
         max_clip_length: int,
+        num_classes: int,
+        classes: List[str],
         train: bool = True,
     ):
 
@@ -15,6 +29,8 @@ class MultiLabelFrameDataset(Dataset):
         self.annotations_dir = annotations_dir
         self.max_clip_length = max_clip_length
         self.train = train
+        self.classes = classes
+        self.num_classes = num_classes
 
         # Initialize transforms
         self.preprocess = Compose(
@@ -114,13 +130,13 @@ class MultiLabelFrameDataset(Dataset):
         filename = root.find("filename").text
 
         # Initialize multi-hot vector
-        labels = torch.zeros(NUM_CLASSES)
+        labels = torch.zeros(self.num_classes)
 
         # Set 1 for each action present in the frame
         for obj in root.findall("object"):
             action = obj.find("name").text
-            if action in CLASSES:
-                labels[CLASSES.index(action)] = 1
+            if action in self.classes:
+                labels[self.classes.index(action)] = 1
 
         return filename, labels
 
@@ -176,7 +192,7 @@ class MultiLabelFrameDataset(Dataset):
         the probability of transitioning from action i to action j between consecutive clips.
         """
         # Initialize transition matrix for all possible action pairs
-        transition_matrix = np.zeros((NUM_CLASSES, NUM_CLASSES))
+        transition_matrix = np.zeros((self.num_classes, self.num_classes))
 
         # For each pair of consecutive clips in our dataset
         for clip_idx in range(len(self.labels) - 1):
