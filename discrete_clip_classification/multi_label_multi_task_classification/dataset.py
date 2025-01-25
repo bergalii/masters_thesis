@@ -2,13 +2,11 @@ from torch.utils.data import Dataset
 import torch
 import pandas as pd
 import numpy as np
-from decord import VideoReader
-from decord import cpu
+from decord import VideoReader, cpu
 import ast
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 import albumentations as A
 from torchvision.transforms import Compose, ToTensor, Normalize
-from collections import defaultdict
 
 
 class MultiTaskVideoDataset(Dataset):
@@ -17,20 +15,36 @@ class MultiTaskVideoDataset(Dataset):
         clips_dir: str,
         annotations_path: str,
         clip_length: int,
+        split: str = "train",
+        train_ratio: float = 0.8,
         train: bool = True,
     ):
         self.clips_dir = clips_dir
         self.clip_length = clip_length
         self.train = train
+        self.split = split
 
         # Read and process annotations
         self.annotations = pd.read_csv(annotations_path)
 
+        # Debugging
+        # self.annotations = pd.read_csv(annotations_path).head(100)
+
+        total_size = len(self.annotations)
+        indices = np.random.permutation(total_size)
+        train_size = int(total_size * train_ratio)
+        if split == "train":
+            split_indices = indices[:train_size]
+        elif split == "val":
+            split_indices = indices[train_size:]
+
+        # Filter annotations based on split
+        self.annotations = self.annotations.iloc[split_indices].reset_index(drop=True)
         # Initialize label name mappings for each category
         self.label_mappings = {
-            "instrument": {},  # Will store instrument_id -> instrument_name
-            "verb": {},  # Will store verb_id -> verb_name
-            "target": {},  # Will store target_id -> target_name
+            "instrument": {},
+            "verb": {},
+            "target": {},
         }
 
         # Process string representations of lists and build label mappings
@@ -53,7 +67,6 @@ class MultiTaskVideoDataset(Dataset):
             ):
                 # Each triplet is in format 'instrument,verb,target'
                 inst_name, verb_name, target_name = triplet.split(",")
-
                 # Update mappings
                 self.label_mappings["instrument"][inst_id] = inst_name
                 self.label_mappings["verb"][verb_id] = verb_name
@@ -129,12 +142,11 @@ class MultiTaskVideoDataset(Dataset):
 
         # Load video (same as before)
         video_path = f"{self.clips_dir}/{row['file_name']}"
-        video = VideoReader(video_path, ctx=cpu(0))
+        video = VideoReader(video_path, width=320, height=180, ctx=cpu(0))
 
         # Sample frames (implementation remains the same as your previous version)
         indices = np.linspace(0, len(video) - 1, self.clip_length, dtype=int)
         frames = video.get_batch(indices).asnumpy()
-
         # Apply augmentations and preprocessing (same as before)
         if self.train:
             data = self.transform(image=frames[0])
@@ -162,14 +174,3 @@ class MultiTaskVideoDataset(Dataset):
         }
 
         return frames, labels
-
-
-# Function to print label mappings in a readable format
-def print_label_mappings(dataset):
-    print("\nLabel Mappings for Each Category:")
-    mappings = dataset.get_label_names()
-
-    for category, mapping in mappings.items():
-        print(f"\n{category.upper()} LABELS:")
-        for label_id, label_name in sorted(mapping.items()):
-            print(f"  {label_id}: {label_name}")

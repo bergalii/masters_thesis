@@ -1,4 +1,6 @@
 .venv/
+logs/
+models/
 videos/
 gt.csv
 counts_gt.txt
