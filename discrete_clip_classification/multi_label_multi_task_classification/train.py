@@ -1,7 +1,8 @@
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
-from trainer import SelfDistillationTrainer
 from trainer_multi import MultiTaskSelfDistillationTrainer
+
+# from trainer_multi_ivt import MultiTaskSelfDistillationTrainer
 import torch
 from utils import setup_logging, set_seeds
 import ast
@@ -34,7 +35,7 @@ def print_and_get_mappings(dataset):
     mappings = dataset.get_label_names()
     all_mappings = {}
 
-    for category in ["instrument", "verb", "target"]:
+    for category in ["instrument", "verb", "target", "triplet"]:
         counts = get_label_counts(dataset, category)
         logger.info(f"{category.upper()} LABELS:")
         for label_id, label_name in sorted(mappings[category].items()):
@@ -49,7 +50,6 @@ num_epochs = 50
 batch_size = 8
 warmup_epochs = 5
 clip_length = 10
-multi_task = True
 
 train_dataset = MultiTaskVideoDataset(
     clips_dir=CLIPS_DIR,
@@ -66,8 +66,9 @@ val_dataset = MultiTaskVideoDataset(
     train=False,
 )
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
+# MultiTaskVideoDataset.calculate_video_mean_std(train_loader)
 
 logger.info("-- Training Dataset Classes--")
 mappings = print_and_get_mappings(train_dataset)
@@ -75,33 +76,21 @@ logger.info("-- Validation Dataset Classes -- ")
 print_and_get_mappings(val_dataset)
 logger.info("-" * 50)
 
-if multi_task:
-    trainer = MultiTaskSelfDistillationTrainer(
-        num_epochs=num_epochs,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        label_mappings=mappings,
-        num_classes={
-            "verb": train_dataset.num_classes["verb"],
-            "instrument": train_dataset.num_classes["instrument"],
-            "target": train_dataset.num_classes["target"],
-        },
-        warmup_epochs=1,
-        device=DEVICE,
-        logger=logger,
-        dir_name=model_dir,
-        task_weights={"verb": 1.0, "instrument": 1.0, "target": 1.0},
-    )
-else:
-    trainer = SelfDistillationTrainer(
-        num_epochs=num_epochs,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        num_classes=train_dataset.num_classes["verb"],
-        warmup_epochs=1,
-        device=DEVICE,
-        logger=logger,
-        label_mappings=mappings["verb"],
-    )
+trainer = MultiTaskSelfDistillationTrainer(
+    num_epochs=num_epochs,
+    train_loader=train_loader,
+    val_loader=val_loader,
+    label_mappings=mappings,
+    num_classes={
+        "verb": train_dataset.num_classes["verb"],
+        "instrument": train_dataset.num_classes["instrument"],
+        "target": train_dataset.num_classes["target"],
+        "triplet": train_dataset.num_classes["triplet"],
+    },
+    warmup_epochs=1,
+    device=DEVICE,
+    logger=logger,
+    dir_name=model_dir,
+)
 
 trainer.train()

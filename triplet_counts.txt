@@ -1,0 +1,213 @@
+action_label_names
+['grasper,retract,gallbladder']                                                                  477
+['grasper,retract,gallbladder', 'hook,dissect,gallbladder']                                      332
+['hook,dissect,gallbladder']                                                                     300
+['grasper,retract,liver', 'hook,dissect,gallbladder']                                            147
+['grasper,retract,gallbladder', 'hook,null_verb,null_target']                                    131
+['grasper,grasp,specimen_bag']                                                                   117
+['grasper,retract,gallbladder', 'hook,dissect,cystic_duct']                                      117
+['grasper,retract,liver']                                                                        115
+['grasper,null_verb,null_target']                                                                 88
+['grasper,retract,gallbladder', 'grasper,retract,liver', 'hook,dissect,gallbladder']              79
+['grasper,retract,liver', 'irrigator,aspirate,fluid']                                             61
+['irrigator,aspirate,fluid']                                                                      56
+['grasper,retract,gallbladder', 'clipper,clip,cystic_duct']                                       56
+['hook,dissect,cystic_duct']                                                                      53
+['grasper,retract,gallbladder', 'hook,dissect,cystic_artery']                                     53
+['grasper,retract,gallbladder', 'hook,dissect,cystic_plate']                                      51
+['grasper,grasp,specimen_bag', 'grasper,null_verb,null_target']                                   50
+['grasper,retract,liver', 'bipolar,coagulate,liver']                                              50
+['grasper,retract,omentum', 'hook,dissect,omentum']                                               45
+['grasper,retract,gallbladder', 'grasper,retract,omentum', 'hook,dissect,omentum']                41
+['grasper,retract,gallbladder', 'clipper,clip,cystic_artery']                                     41
+['grasper,grasp,gallbladder', 'grasper,grasp,specimen_bag']                                       39
+['grasper,retract,gallbladder', 'grasper,null_verb,null_target']                                  36
+['grasper,grasp,gallbladder']                                                                     35
+['grasper,retract,gallbladder', 'scissors,cut,cystic_duct']                                       32
+['grasper,retract,liver', 'grasper,null_verb,null_target']                                        32
+['grasper,retract,gallbladder', 'hook,dissect,omentum']                                           30
+['clipper,clip,cystic_duct']                                                                      29
+['grasper,retract,gallbladder', 'grasper,retract,liver']                                          28
+['hook,dissect,omentum']                                                                          28
+['grasper,retract,gallbladder', 'irrigator,aspirate,fluid']                                       28
+['grasper,retract,gallbladder', 'hook,retract,gallbladder']                                       27
+['hook,dissect,cystic_plate']                                                                     25
+['hook,null_verb,null_target']                                                                    24
+['grasper,retract,gallbladder', 'scissors,cut,cystic_artery']                                     23
+['grasper,retract,gallbladder', 'grasper,retract,omentum']                                        22
+['grasper,grasp,gallbladder', 'hook,dissect,gallbladder']                                         20
+['grasper,retract,omentum']                                                                       20
+['bipolar,coagulate,liver']                                                                       18
+['grasper,grasp,gallbladder', 'grasper,retract,gallbladder', 'hook,dissect,gallbladder']          16
+['scissors,cut,cystic_duct']                                                                      16
+['grasper,grasp,gallbladder', 'grasper,retract,gallbladder']                                      16
+['clipper,clip,cystic_artery']                                                                    16
+['grasper,retract,cystic_plate', 'grasper,retract,gallbladder']                                   16
+['bipolar,coagulate,abdominal_wall_cavity']                                                       15
+['hook,dissect,cystic_artery']                                                                    15
+['bipolar,null_verb,null_target']                                                                 14
+['grasper,grasp,specimen_bag', 'grasper,pack,gallbladder']                                        14
+['bipolar,coagulate,gallbladder']                                                                 14
+['grasper,retract,omentum', 'hook,dissect,gallbladder']                                           13
+['grasper,retract,cystic_plate', 'hook,dissect,gallbladder']                                      12
+['grasper,retract,gallbladder', 'clipper,null_verb,null_target']                                  12
+['grasper,grasp,gallbladder', 'grasper,retract,liver', 'hook,dissect,gallbladder']                12
+['scissors,cut,cystic_artery']                                                                    11
+['grasper,retract,cystic_plate', 'grasper,retract,gallbladder', 'hook,dissect,gallbladder']       10
+['irrigator,aspirate,fluid', 'grasper,null_verb,null_target']                                     10
+['grasper,grasp,gallbladder', 'grasper,retract,liver']                                            10
+['grasper,retract,liver', 'irrigator,null_verb,null_target']                                      10
+['hook,coagulate,liver']                                                                           9
+['grasper,retract,liver', 'bipolar,null_verb,null_target']                                         8
+['grasper,null_verb,null_target', 'hook,null_verb,null_target']                                    8
+['grasper,retract,gallbladder', 'hook,retract,liver']                                              8
+['hook,coagulate,gallbladder']                                                                     8
+['grasper,grasp,cystic_duct', 'grasper,retract,gallbladder']                                       8
+['grasper,retract,liver', 'bipolar,coagulate,liver', 'irrigator,null_verb,null_target']            8
+['grasper,grasp,gallbladder', 'grasper,grasp,specimen_bag', 'grasper,null_verb,null_target']       8
+['grasper,retract,gut']                                                                            8
+['grasper,grasp,gallbladder', 'hook,null_verb,null_target']                                        8
+['grasper,retract,liver', 'irrigator,irrigate,abdominal_wall_cavity']                              8
+['grasper,retract,gallbladder', 'grasper,retract,liver', 'hook,null_verb,null_target']             8
+['grasper,retract,gallbladder', 'grasper,retract,gut']                                             7
+['grasper,retract,cystic_duct']                                                                    7
+['grasper,retract,liver', 'bipolar,coagulate,cystic_plate']                                        6
+['grasper,retract,peritoneum', 'hook,dissect,peritoneum']                                          6
+['grasper,retract,gallbladder', 'scissors,null_verb,null_target']                                  6
+['grasper,retract,gallbladder', 'hook,coagulate,gallbladder']                                      6
+['irrigator,irrigate,abdominal_wall_cavity']                                                       6
+['bipolar,dissect,omentum']                                                                        6
+['hook,dissect,peritoneum']                                                                        6
+['grasper,grasp,gallbladder', 'grasper,null_verb,null_target']                                     6
+['grasper,retract,gallbladder', 'bipolar,coagulate,cystic_plate']                                  6
+['grasper,retract,liver', 'bipolar,coagulate,liver', 'grasper,null_verb,null_target']              6
+['grasper,retract,liver', 'irrigator,irrigate,liver']                                              6
+['grasper,retract,liver', 'bipolar,coagulate,liver', 'irrigator,retract,liver']                    6
+['grasper,grasp,gallbladder', 'irrigator,aspirate,fluid']                                          5
+['grasper,retract,omentum', 'hook,coagulate,omentum']                                              5
+['bipolar,coagulate,cystic_plate']                                                                 5
+['irrigator,irrigate,abdominal_wall_cavity', 'grasper,null_verb,null_target']                      5
+['grasper,retract,liver', 'grasper,retract,omentum']                                               5
+['grasper,retract,omentum', 'hook,null_verb,null_target']                                          5
+['grasper,dissect,gallbladder']                                                                    5
+['grasper,retract,gallbladder', 'grasper,retract,omentum', 'hook,null_verb,null_target']           5
+['grasper,retract,liver', 'hook,coagulate,liver']                                                  5
+['grasper,retract,gallbladder', 'bipolar,null_verb,null_target']                                   5
+['grasper,grasp,gallbladder', 'grasper,retract,gallbladder', 'hook,null_verb,null_target']         5
+['grasper,retract,gallbladder', 'irrigator,dissect,cystic_pedicle']                                5
+['grasper,grasp,specimen_bag', 'irrigator,aspirate,fluid']                                         5
+['grasper,retract,gallbladder', 'bipolar,dissect,cystic_artery']                                   4
+['grasper,retract,cystic_plate', 'grasper,retract,gallbladder', 'hook,dissect,cystic_duct']        4
+['grasper,grasp,gallbladder', 'clipper,clip,cystic_artery']                                        4
+['grasper,retract,cystic_duct', 'irrigator,aspirate,fluid']                                        4
+['grasper,retract,gallbladder', 'hook,dissect,peritoneum']                                         4
+['irrigator,retract,liver']                                                                        4
+['grasper,grasp,gallbladder', 'clipper,clip,cystic_duct']                                          4
+['grasper,grasp,gallbladder', 'scissors,cut,cystic_duct']                                          4
+['grasper,retract,cystic_plate', 'grasper,retract,gallbladder', 'hook,dissect,cystic_plate']       4
+['grasper,retract,gallbladder', 'bipolar,dissect,gallbladder']                                     4
+['grasper,retract,gallbladder', 'bipolar,dissect,cystic_duct']                                     4
+['grasper,retract,cystic_plate']                                                                   4
+['grasper,grasp,cystic_duct']                                                                      4
+['grasper,retract,gallbladder', 'hook,coagulate,cystic_duct']                                      4
+['hook,dissect,gallbladder', 'grasper,null_verb,null_target']                                      4
+['grasper,retract,gallbladder', 'bipolar,coagulate,gallbladder']                                   4
+['grasper,retract,omentum', 'bipolar,dissect,omentum']                                             4
+['grasper,retract,cystic_duct', 'grasper,retract,gallbladder']                                     4
+['grasper,retract,gallbladder', 'hook,dissect,omentum', 'irrigator,retract,omentum']               4
+['grasper,retract,liver', 'irrigator,aspirate,fluid', 'grasper,null_verb,null_target']             4
+['grasper,retract,liver', 'bipolar,coagulate,liver', 'irrigator,aspirate,fluid']                   4
+['grasper,retract,omentum', 'irrigator,aspirate,fluid']                                            4
+['bipolar,coagulate,liver', 'irrigator,null_verb,null_target']                                     4
+['grasper,retract,gallbladder', 'clipper,clip,blood_vessel']                                       3
+['grasper,retract,liver', 'bipolar,coagulate,gallbladder']                                         3
+['grasper,retract,omentum', 'scissors,dissect,omentum']                                            3
+['grasper,grasp,specimen_bag', 'bipolar,null_verb,null_target']                                    3
+['grasper,retract,gallbladder', 'hook,coagulate,liver']                                            3
+['grasper,retract,liver', 'hook,null_verb,null_target']                                            3
+['grasper,retract,gut', 'irrigator,aspirate,fluid']                                                3
+['grasper,retract,gallbladder', 'bipolar,coagulate,omentum']                                       3
+['grasper,retract,gallbladder', 'bipolar,coagulate,omentum', 'irrigator,aspirate,fluid']           3
+['scissors,null_verb,null_target']                                                                 3
+['grasper,retract,cystic_duct', 'grasper,retract,gallbladder', 'irrigator,aspirate,fluid']         3
+['grasper,retract,cystic_duct', 'hook,dissect,cystic_duct']                                        3
+['irrigator,null_verb,null_target']                                                                3
+['grasper,retract,gallbladder', 'hook,dissect,gallbladder', 'grasper,null_verb,null_target']       3
+['grasper,dissect,gallbladder', 'grasper,retract,gallbladder']                                     3
+['bipolar,coagulate,liver', 'grasper,null_verb,null_target']                                       3
+['grasper,grasp,omentum', 'grasper,retract,gallbladder', 'hook,dissect,cystic_duct']               3
+['grasper,retract,omentum', 'bipolar,coagulate,gallbladder']                                       3
+['grasper,retract,liver', 'grasper,null_verb,null_target', 'irrigator,null_verb,null_target']      3
+['grasper,grasp,gallbladder', 'hook,dissect,cystic_duct']                                          3
+['grasper,grasp,gallbladder', 'bipolar,coagulate,blood_vessel']                                    3
+['bipolar,coagulate,blood_vessel']                                                                 3
+['grasper,retract,gallbladder', 'grasper,retract,omentum', 'bipolar,coagulate,omentum']            3
+['bipolar,coagulate,liver', 'irrigator,aspirate,fluid']                                            3
+['bipolar,grasp,liver', 'scissors,cut,liver']                                                      3
+['grasper,pack,gallbladder']                                                                       3
+['bipolar,coagulate,cystic_pedicle']                                                               3
+['grasper,retract,omentum', 'hook,coagulate,gallbladder']                                          3
+['grasper,retract,peritoneum', 'hook,dissect,gallbladder']                                         3
+['bipolar,dissect,gallbladder']                                                                    3
+['grasper,retract,peritoneum', 'hook,null_verb,null_target']                                       3
+['grasper,retract,liver', 'irrigator,retract,liver']                                               3
+['grasper,retract,gallbladder', 'bipolar,coagulate,cystic_artery']                                 3
+['irrigator,irrigate,abdominal_wall_cavity', 'bipolar,null_verb,null_target']                      3
+['grasper,grasp,cystic_plate']                                                                     3
+['grasper,retract,gallbladder', 'bipolar,coagulate,cystic_pedicle']                                3
+['grasper,retract,liver', 'bipolar,retract,liver']                                                 3
+['grasper,retract,gut', 'grasper,retract,liver', 'irrigator,aspirate,fluid']                       3
+['clipper,null_verb,null_target']                                                                  3
+['grasper,retract,omentum', 'bipolar,coagulate,omentum']                                           3
+['grasper,retract,cystic_plate', 'grasper,retract,gallbladder', 'hook,null_verb,null_target']      3
+['grasper,retract,omentum', 'irrigator,dissect,omentum']                                           3
+['grasper,retract,gallbladder', 'grasper,retract,liver', 'hook,retract,gallbladder']               2
+['grasper,retract,cystic_plate', 'hook,null_verb,null_target']                                     2
+['hook,retract,liver']                                                                             2
+['grasper,retract,gallbladder', 'scissors,dissect,gallbladder']                                    2
+['grasper,retract,gut', 'scissors,cut,peritoneum']                                                 2
+['grasper,retract,gallbladder', 'bipolar,retract,liver']                                           2
+['grasper,grasp,gallbladder', 'grasper,retract,liver', 'bipolar,null_verb,null_target']            2
+['bipolar,retract,gallbladder']                                                                    2
+['bipolar,dissect,cystic_plate']                                                                   2
+['bipolar,dissect,adhesion']                                                                       2
+['bipolar,retract,liver', 'irrigator,retract,liver']                                               2
+['irrigator,aspirate,fluid', 'bipolar,null_verb,null_target']                                      2
+['grasper,dissect,cystic_plate']                                                                   2
+['grasper,retract,gallbladder', 'scissors,dissect,omentum']                                        2
+['grasper,retract,omentum', 'scissors,coagulate,omentum']                                          2
+['scissors,dissect,omentum']                                                                       2
+['grasper,retract,gallbladder', 'grasper,retract,omentum', 'hook,coagulate,omentum']               2
+['grasper,grasp,specimen_bag', 'grasper,retract,liver']                                            2
+['grasper,retract,liver', 'hook,retract,liver']                                                    2
+['bipolar,dissect,cystic_duct']                                                                    2
+['bipolar,coagulate,cystic_artery']                                                                2
+['grasper,grasp,gallbladder', 'grasper,retract,gallbladder', 'grasper,null_verb,null_target']      2
+['grasper,retract,peritoneum']                                                                     2
+['grasper,retract,peritoneum', 'hook,dissect,omentum']                                             2
+['grasper,retract,liver', 'bipolar,retract,liver', 'grasper,null_verb,null_target']                2
+['grasper,grasp,gallbladder', 'hook,dissect,omentum']                                              2
+['grasper,grasp,omentum', 'hook,dissect,cystic_duct']                                              2
+['grasper,grasp,gallbladder', 'grasper,retract,gallbladder', 'hook,dissect,cystic_duct']           2
+['grasper,retract,gallbladder', 'grasper,retract,liver', 'clipper,clip,cystic_duct']               2
+['grasper,grasp,gallbladder', 'scissors,cut,cystic_artery']                                        2
+['grasper,grasp,gallbladder', 'grasper,retract,gallbladder', 'hook,dissect,peritoneum']            2
+['grasper,retract,gut', 'hook,dissect,omentum']                                                    2
+['grasper,retract,gallbladder', 'bipolar,coagulate,liver']                                         2
+['grasper,grasp,gallbladder', 'grasper,grasp,specimen_bag', 'grasper,retract,liver']               2
+['grasper,retract,cystic_duct', 'clipper,clip,cystic_duct']                                        2
+['grasper,retract,liver', 'grasper,retract,omentum', 'irrigator,aspirate,fluid']                   2
+['grasper,retract,liver', 'bipolar,coagulate,cystic_plate', 'irrigator,aspirate,fluid']            2
+['grasper,retract,liver', 'irrigator,irrigate,liver', 'bipolar,null_verb,null_target']             2
+['grasper,retract,gut', 'hook,dissect,gallbladder']                                                2
+['grasper,retract,gallbladder', 'scissors,cut,blood_vessel']                                       2
+['grasper,retract,liver', 'hook,coagulate,gallbladder']                                            2
+['grasper,grasp,omentum', 'grasper,retract,gallbladder']                                           2
+['grasper,grasp,omentum', 'grasper,retract,gallbladder', 'bipolar,coagulate,omentum']              2
+['grasper,retract,cystic_plate', 'grasper,retract,gallbladder', 'bipolar,coagulate,liver']         2
+['grasper,retract,gallbladder', 'irrigator,null_verb,null_target']                                 2
+['grasper,retract,cystic_plate', 'grasper,retract,gallbladder', 'clipper,clip,cystic_artery']      2
+['grasper,retract,gallbladder', 'irrigator,retract,gallbladder']                                   2
+['grasper,retract,gallbladder', 'grasper,retract,omentum', 'hook,dissect,gallbladder']             2
+['grasper,retract,cystic_duct', 'grasper,retract,gallbladder', 'clipper,clip,cystic_duct']         2
+['grasper,retract,liver', 'bipolar,dissect,gallbladder']                                           2

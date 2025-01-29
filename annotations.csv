@@ -1,4 +1,4 @@
-file_name,action_label,action_label_names,instrument_label,verb_label,target_label,phase_label
+file_name,triplet_label,triplet_label_names,instrument_label,verb_label,target_label,phase_label
 video01_clip_0_4.mp4,[7],"['grasper,grasp,gallbladder']",[0],[0],[0],[1]
 video01_clip_10_19.mp4,[7],"['grasper,grasp,gallbladder']",[0],[0],[0],[1]
 video01_clip_108_135.mp4,[96],"['hook,null_verb,null_target']",[2],[9],[14],[1]

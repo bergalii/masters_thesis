@@ -24,7 +24,7 @@ class MultiTaskVideoDataset(Dataset):
         self.train = train
         self.split = split
 
-        # Read and process annotations
+        # Read the annotations
         self.annotations = pd.read_csv(annotations_path)
 
         # Debugging
@@ -45,6 +45,7 @@ class MultiTaskVideoDataset(Dataset):
             "instrument": {},
             "verb": {},
             "target": {},
+            "triplet": {},
         }
 
         # Process string representations of lists and build label mappings
@@ -54,16 +55,19 @@ class MultiTaskVideoDataset(Dataset):
                 "instrument_label",
                 "verb_label",
                 "target_label",
+                "triplet_label",
             ]:
                 row[col] = ast.literal_eval(row[col])
 
-            # Process action_label_names to extract mappings
-            action_names = ast.literal_eval(row["action_label_names"])
-            for triplet, inst_id, verb_id, target_id in zip(
-                action_names,
-                row["instrument_label"],
-                row["verb_label"],
-                row["target_label"],
+            # Process triplet_label_names to extract mappings
+            action_names = ast.literal_eval(row["triplet_label_names"])
+            for triplet_id, (triplet, inst_id, verb_id, target_id) in enumerate(
+                zip(
+                    action_names,
+                    row["instrument_label"],
+                    row["verb_label"],
+                    row["target_label"],
+                )
             ):
                 # Each triplet is in format 'instrument,verb,target'
                 inst_name, verb_name, target_name = triplet.split(",")
@@ -71,6 +75,8 @@ class MultiTaskVideoDataset(Dataset):
                 self.label_mappings["instrument"][inst_id] = inst_name
                 self.label_mappings["verb"][verb_id] = verb_name
                 self.label_mappings["target"][target_id] = target_name
+                triplet_id = row["triplet_label"][triplet_id]
+                self.label_mappings["triplet"][triplet_id] = triplet
 
         # Get number of classes for each category
         self.num_classes = {
@@ -171,6 +177,48 @@ class MultiTaskVideoDataset(Dataset):
             "target": self._create_multi_hot(
                 ast.literal_eval(str(row["target_label"])), "target"
             ),
+            "triplet": self._create_multi_hot(
+                ast.literal_eval(str(row["triplet_label"])), "triplet"
+            ),
         }
 
-        return frames, labels
+        return frames, labels, idx
+
+    @staticmethod
+    def calculate_video_mean_std(
+        loader,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Calculate mean and standard deviation across all frames in the video dataset.
+
+        Args:
+            dataset: MultiTaskVideoDataset instance
+            batch_size: Number of videos to process in each batch
+            num_workers: Number of worker processes for data loading
+
+        Returns:
+            tuple: (mean, std) tensors of shape (3,) for RGB channels
+        """
+
+        # Initialize accumulators for each channel
+        channels_sum = torch.zeros(3)
+        channels_squared_sum = torch.zeros(3)
+        num_frames = 0
+
+        # Process each batch
+        for frames, _ in loader:
+            b, c, t, h, w = frames.shape
+            frames = frames.permute(0, 2, 1, 3, 4).reshape(-1, c, h, w)
+
+            # Calculate mean and squared mean for the batch
+            batch_samples = frames.size(0)
+            channels_sum += frames.mean(dim=(0, 2, 3)) * batch_samples
+            channels_squared_sum += (frames**2).mean(dim=(0, 2, 3)) * batch_samples
+            num_frames += batch_samples
+
+        # Calculate final statistics
+        mean = channels_sum / num_frames
+        std = torch.sqrt(channels_squared_sum / num_frames - mean**2)
+
+        print(f"Dataset mean: [{mean[0]:.4f}, {mean[1]:.4f}, {mean[2]:.4f}]")
+        print(f"Dataset std: [{std[0]:.4f}, {std[1]:.4f}, {std[2]:.4f}]")

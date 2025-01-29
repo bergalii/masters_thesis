@@ -5,41 +5,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import logging
 from torchvision.models.video.swin_transformer import swin3d_s, Swin3D_S_Weights
-from sklearn.metrics import (
-    average_precision_score,
-    f1_score,
-    precision_score,
-    recall_score,
-)
-import numpy as np
-
-
-class CrossAttentionFusion(nn.Module):
-    def __init__(self, feature_dims, common_dim=128):
-        super().__init__()
-        self.common_dim = common_dim
-        self.query = nn.Linear(feature_dims["verb"], common_dim)
-        self.key = nn.Linear(feature_dims["instrument"], common_dim)
-        self.value = nn.Linear(feature_dims["target"], common_dim)
-
-    def forward(self, verb_feat, inst_feat, target_feat):
-        # Project features to common dimension
-        Q = self.query(verb_feat)  # (B, common_dim)
-        K = self.key(inst_feat)  # (B, common_dim)
-        V = self.value(target_feat)  # (B, common_dim)
-
-        # Compute scaled dot-product attention
-        scale_factor = 1.0 / (self.common_dim**0.5)
-        attention_scores = (
-            torch.bmm(Q.unsqueeze(1), K.unsqueeze(1).transpose(1, 2)) * scale_factor
-        )
-        attention = torch.softmax(attention_scores, dim=-1)
-
-        # Apply attention to value
-        attention_output = torch.bmm(attention, V.unsqueeze(1)).squeeze(
-            1
-        )  # (B, common_dim)
-        return attention_output
+from ivtmetrics import Recognition
 
 
 class MultiTaskHead(nn.Module):
@@ -67,6 +33,7 @@ class MultiTaskSelfDistillationTrainer:
         train_loader,
         val_loader,
         num_classes: dict,
+        num_triplet_combinations: int,
         label_mappings: dict,
         device,
         logger: logging.Logger,
@@ -80,16 +47,18 @@ class MultiTaskSelfDistillationTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.num_classes = num_classes
+        self.num_triplet_combinations = num_triplet_combinations
         self.label_mappings = label_mappings
         self.device = device
         self.logger = logger
         self.dir_name = dir_name
-        self.feature_dims = {
-            "verb": self.num_classes["verb"],
-            "instrument": self.num_classes["instrument"],
-            "target": self.num_classes["target"],
+
+        self.task_to_component = {
+            "verb": "v",
+            "instrument": "i",
+            "target": "t",
+            "triplet": "ivt",
         }
-        self.cross_attention = CrossAttentionFusion(self.feature_dims).to(self.device)
         self._configure_models()
 
     def _configure_models(self):
@@ -115,18 +84,14 @@ class MultiTaskSelfDistillationTrainer:
                 in_features, self.num_classes["target"]
             ).to(self.device)
 
-            common_dim = self.cross_attention.common_dim
-            total_input_size = (
-                in_features + sum(self.feature_dims.values()) + common_dim
-            )
-
+            # Triplet combination prediction head using fused features
             model.triplet_head = nn.Sequential(
-                nn.LayerNorm(total_input_size),
+                nn.LayerNorm(in_features + sum(self.num_classes.values())),
                 nn.Dropout(p=0.5),
-                nn.Linear(total_input_size, 512),
+                nn.Linear(in_features + sum(self.num_classes.values()), 512),
                 nn.GELU(),
                 nn.Dropout(p=0.3),
-                nn.Linear(512, self.num_classes["triplet"]),
+                nn.Linear(512, self.num_triplet_combinations),
             ).to(self.device)
 
             # Remove original classification head
@@ -153,21 +118,9 @@ class MultiTaskSelfDistillationTrainer:
         instrument_logits = model.instrument_head(features)
         target_logits = model.target_head(features)
 
-        # Apply cross-attention fusion
-        attention_output = self.cross_attention(
-            verb_logits, instrument_logits, target_logits
-        )
-
         # Combine all features for triplet prediction
         combined_features = torch.cat(
-            [
-                features,  # original features from backbone
-                verb_logits,  # verb predictions
-                instrument_logits,  # instrument predictions
-                target_logits,  # target predictions
-                attention_output,  # attention-fused features
-            ],
-            dim=1,
+            [features, verb_logits, instrument_logits, target_logits], dim=1
         )
 
         triplet_logits = model.triplet_head(combined_features)
@@ -183,7 +136,7 @@ class MultiTaskSelfDistillationTrainer:
         """Compute the combined loss for all tasks"""
         total_loss = 0
         losses = {}
-        task_weights = {"verb": 1.0, "instrument": 1.0, "target": 1.0, "triplet": 2.0}
+
         for task in ["verb", "instrument", "target", "triplet"]:
             # Standard cross-entropy loss
             loss = F.binary_cross_entropy_with_logits(outputs[task], labels[task])
@@ -195,7 +148,7 @@ class MultiTaskSelfDistillationTrainer:
                 )
                 loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
 
-            total_loss += task_weights[task] * loss
+            total_loss += loss
             losses[task] = loss.item()
 
         return total_loss, losses
@@ -212,7 +165,7 @@ class MultiTaskSelfDistillationTrainer:
                 task: 0.0 for task in ["verb", "instrument", "target", "triplet"]
             }
 
-            for batch_idx, (inputs, labels, video_ids) in enumerate(self.train_loader):
+            for batch_idx, (inputs, labels) in enumerate(self.train_loader):
                 inputs = inputs.to(self.device)
                 batch_labels = {
                     task: labels[task].to(self.device)
@@ -258,9 +211,7 @@ class MultiTaskSelfDistillationTrainer:
             self.logger.info("Training Losses:")
             for task in ["verb", "instrument", "target", "triplet"]:
                 avg_loss = epoch_losses[task] / len(self.train_loader)
-                self.logger.info(
-                    f"{task}: Loss={avg_loss:.4f}, mAP={val_maps[task]:.4f}"
-                )
+                self.logger.info(f"{task}: Loss={avg_loss:.4f}")
             self.logger.info("-" * 50)
 
             # Save best models for each task
@@ -269,8 +220,7 @@ class MultiTaskSelfDistillationTrainer:
                     self.logger.info(f"Saving the best model for the task {task}")
                     best_map[task] = val_maps[task]
                     torch.save(
-                        model.state_dict(),
-                        f"{self.dir_name}/best_model_{task}_{is_teacher}.pth",
+                        model.state_dict(), f"{self.dir_name}/best_model_{task}.pth"
                     )
 
     def _generate_soft_labels(self):
@@ -279,7 +229,7 @@ class MultiTaskSelfDistillationTrainer:
         soft_labels = {"verb": [], "instrument": [], "target": [], "triplet": []}
 
         with torch.no_grad():
-            for inputs, _, _ in self.train_loader:
+            for inputs, _ in self.train_loader:
                 inputs = inputs.to(self.device)
                 outputs = self._forward_pass(self.teacher_model, inputs)
 
@@ -291,88 +241,35 @@ class MultiTaskSelfDistillationTrainer:
     def _validate_model(self, model):
         """Validate model and compute metrics for all tasks"""
         model.eval()
-        outputs = {task: [] for task in ["verb", "instrument", "target", "triplet"]}
-        labels = {task: [] for task in ["verb", "instrument", "target", "triplet"]}
+        # Initialize ivtmetrics Recognition objects for each task
+
+        recognize = Recognition(num_class=self.num_triplet_combinations)
+        recognize.reset_global()
 
         with torch.no_grad():
-            for inputs, batch_labels, video_ids in self.val_loader:
+            for inputs, batch_labels in self.val_loader:
                 inputs = inputs.to(self.device)
                 model_outputs = self._forward_pass(model, inputs)
-                for task in ["verb", "instrument", "target", "triplet"]:
-                    outputs[task].append(model_outputs[task].cpu())
-                    labels[task].append(batch_labels[task].cpu())
+                predictions = torch.sigmoid(model_outputs["triplet"]).cpu().numpy()
+                binary_preds = (predictions > 0.5).astype(int)
+                print(binary_preds[0])
+                true_labels = batch_labels["triplet"].cpu().numpy()
+                print(true_labels[0])
+                recognize.update(true_labels, binary_preds)
+                recognize.video_end()
 
-        task_metrics = {}
-        for task in ["verb", "instrument", "target", "triplet"]:
-            task_outputs = torch.cat(outputs[task], dim=0)
-            task_labels = torch.cat(labels[task], dim=0)
-            predictions = torch.sigmoid(task_outputs).numpy()
-            true_labels = task_labels.numpy()
+            # Compute metrics after processing all videos
+            results = {}
+            # Compute component-wise metrics
+            results["instrument"] = recognize.compute_video_AP("i")
+            results["verb"] = recognize.compute_video_AP("v")
+            results["target"] = recognize.compute_video_AP("t")
+            results["triplet"] = recognize.compute_video_AP("ivt")
 
-            task_metrics[task] = {
-                "overall": {
-                    "mAP": average_precision_score(
-                        true_labels, predictions, average="micro"
-                    ),
-                    "macro_AP": average_precision_score(
-                        true_labels, predictions, average="macro"
-                    ),
-                    "weighted_AP": average_precision_score(
-                        true_labels, predictions, average="weighted"
-                    ),
-                },
-                "per_class": {},
-            }
-
-            task_metrics[task]["per_class"] = {}
-            class_aps = average_precision_score(true_labels, predictions, average=None)
-
-            for i in range(len(class_aps)):
-                class_preds = predictions[:, i]
-                class_labels = true_labels[:, i]
-                label_name = self.label_mappings[task].get(i, f"Class_{i}")
-
-                thresholds = np.arange(0.3, 0.7, 0.1)
-                f1_scores = [
-                    f1_score(class_labels, class_preds > t) for t in thresholds
-                ]
-                optimal_threshold = thresholds[np.argmax(f1_scores)]
-                binary_preds = (class_preds > optimal_threshold).astype(int)
-
-                task_metrics[task]["per_class"][label_name] = {
-                    "AP": class_aps[i],
-                    "precision": precision_score(class_labels, binary_preds),
-                    "recall": recall_score(class_labels, binary_preds),
-                    "f1": f1_score(class_labels, binary_preds),
-                    "optimal_threshold": optimal_threshold,
-                }
-
-            # Log metrics
-            self.logger.info(f"{task.upper()} METRICS:")
-            self.logger.info(
-                f"  Overall mAP: {task_metrics[task]['overall']['mAP']:.4f}"
-            )
-            self.logger.info(
-                f"  Macro AP: {task_metrics[task]['overall']['macro_AP']:.4f}"
-            )
-            self.logger.info(
-                f"  Weighted AP: {task_metrics[task]['overall']['weighted_AP']:.4f}"
-            )
-
-            if "per_class" in task_metrics[task]:
-                for class_name, metrics in task_metrics[task]["per_class"].items():
-                    self.logger.info(f" {class_name}:")
-                    self.logger.info(f"  AP: {metrics['AP']:.4f}")
-                    self.logger.info(f"  F1: {metrics['f1']:.4f}")
-                    self.logger.info(f"  Precision: {metrics['precision']:.4f}")
-                    self.logger.info(f"  Recall: {metrics['recall']:.4f}")
-                    self.logger.info(
-                        f"  Optimal threshold: {metrics['optimal_threshold']:.2f}"
-                    )
-
-        return {
-            task: metrics["overall"]["mAP"] for task, metrics in task_metrics.items()
-        }
+            for task in ["verb", "instrument", "target", "triplet"]:
+                self.logger.info(" {task} results:")
+                self.logger.info(f"{task}: mAP={results[task]['mAP']:.4f}, ")
+            return results
 
     def train(self):
         """Execute full training pipeline with self-distillation"""
@@ -403,13 +300,6 @@ class MultiTaskSelfDistillationTrainer:
             is_teacher=False,
             soft_labels=soft_labels,
         )
-
-    def _resolve_nan(self, results):
-        equiv_nan = ["-0", "-0.", "-0.0", "-.0"]
-        results = list(map(str, results))
-        results = [np.nan if x in equiv_nan else x for x in results]
-        results = np.array(list(map(float, results)))
-        return results
 
     def _create_optimizer_and_scheduler(self, model, lr, weight_decay, patience):
         """Create optimizer and scheduler with parameter groups"""
