@@ -7,6 +7,8 @@ import ast
 from typing import List, Dict, Tuple
 import albumentations as A
 from torchvision.transforms import Compose, ToTensor, Normalize
+from collections import defaultdict
+import random
 
 
 class MultiTaskVideoDataset(Dataset):
@@ -15,31 +17,33 @@ class MultiTaskVideoDataset(Dataset):
         clips_dir: str,
         annotations_path: str,
         clip_length: int,
-        split: str = "train",
-        train_ratio: float = 0.8,
-        train: bool = True,
+        split: str,
+        train_ratio: float,
+        train: bool,
+        frame_width: int,
+        frame_height: int,
+        min_occurrences: int = 100,
     ):
         self.clips_dir = clips_dir
         self.clip_length = clip_length
         self.train = train
         self.split = split
-
+        self.min_occurrences = min_occurrences
+        self.frame_width = frame_width
+        self.frame_height = frame_height
         # Read the annotations
         self.annotations = pd.read_csv(annotations_path)
 
         # Debugging
         # self.annotations = pd.read_csv(annotations_path).head(100)
 
-        total_size = len(self.annotations)
-        indices = np.random.permutation(total_size)
-        train_size = int(total_size * train_ratio)
-        if split == "train":
-            split_indices = indices[:train_size]
-        elif split == "val":
-            split_indices = indices[train_size:]
-
-        # Filter annotations based on split
+        split_indices = self._create_stratified_split(train_ratio)
         self.annotations = self.annotations.iloc[split_indices].reset_index(drop=True)
+
+        # Balance training set
+        if split == "train":
+            self._balance_dataset()
+
         # Initialize label name mappings for each category
         self.label_mappings = {
             "instrument": {},
@@ -48,8 +52,23 @@ class MultiTaskVideoDataset(Dataset):
             "triplet": {},
         }
 
+        # Create continuous index mappings for triplets
+        self.triplet_to_index = {}
+        self.index_to_triplet = {}
+
+        # First, collect all unique triplet IDs
+        all_triplet_ids = set()
+        for _, row in self.annotations.iterrows():
+            triplet_labels = ast.literal_eval(row["triplet_label"])
+            all_triplet_ids.update(triplet_labels)
+
+        # Create continuous mapping for triplet IDs
+        for new_idx, original_id in enumerate(sorted(all_triplet_ids)):
+            self.triplet_to_index[original_id] = new_idx
+            self.index_to_triplet[new_idx] = original_id
+
         # Process string representations of lists and build label mappings
-        for idx, row in self.annotations.iterrows():
+        for _, row in self.annotations.iterrows():
             # Convert string lists to actual lists
             for col in [
                 "instrument_label",
@@ -78,10 +97,12 @@ class MultiTaskVideoDataset(Dataset):
                 triplet_id = row["triplet_label"][triplet_id]
                 self.label_mappings["triplet"][triplet_id] = triplet
 
-        # Get number of classes for each category
+        # Calculate num_classes c
         self.num_classes = {
-            category: max(mapping.keys()) + 1
-            for category, mapping in self.label_mappings.items()
+            "instrument": max(self.label_mappings["instrument"].keys()) + 1,
+            "verb": max(self.label_mappings["verb"].keys()) + 1,
+            "target": max(self.label_mappings["target"].keys()) + 1,
+            "triplet": len(self.triplet_to_index),
         }
 
         # Initialize transforms (same as before)
@@ -117,6 +138,96 @@ class MultiTaskVideoDataset(Dataset):
             ]
         )
 
+    def _create_stratified_split(self, train_ratio: float) -> np.ndarray:
+        """
+        Create a stratified split ensuring each triplet combination appears in both train and val sets.
+
+        Args:
+            train_ratio: Fraction of data to use for training
+
+        Returns:
+            np.ndarray: Indices for the current split (train or validation)
+        """
+        # Create a mapping of triplet combinations to video indices
+        triplet_to_indices = defaultdict(list)
+
+        for idx, row in self.annotations.iterrows():
+            # Convert string representation to actual list
+            triplet_combo = tuple(sorted(ast.literal_eval(row["triplet_label"])))
+            triplet_to_indices[triplet_combo].append(idx)
+
+        train_indices = []
+        val_indices = []
+
+        # For each triplet combination
+        for triplet_combo, indices in triplet_to_indices.items():
+            combo_indices = np.array(indices)
+            np.random.shuffle(combo_indices)
+
+            # Ensure at least one sample in each split
+            if len(combo_indices) == 1:
+                # If only one sample, add to training set
+                train_indices.extend(combo_indices)
+            else:
+                # Calculate training size, ensuring at least one sample remains for validation
+                combo_train_size = min(
+                    max(1, int(len(combo_indices) * train_ratio)),
+                    len(combo_indices) - 1,  # Ensure at least one sample for validation
+                )
+
+                train_indices.extend(combo_indices[:combo_train_size])
+                val_indices.extend(combo_indices[combo_train_size:])
+
+        # Convert to numpy arrays and shuffle
+        train_indices = np.array(train_indices)
+        val_indices = np.array(val_indices)
+        np.random.shuffle(train_indices)
+        np.random.shuffle(val_indices)
+
+        # Return appropriate indices based on split
+        if self.split == "train":
+            return train_indices
+        else:
+            return val_indices
+
+    def _balance_dataset(self):
+        """Oversample clips containing underrepresented triplets"""
+        triplet_counts = defaultdict(int)
+        # Count current triplet occurrences
+        for _, row in self.annotations.iterrows():
+            for triplet in ast.literal_eval(row["triplet_label"]):
+                triplet_counts[triplet] += 1
+
+        # Identify triplets needing more samples
+        needed_triplets = {
+            triplet: max(self.min_occurrences - count, 0)
+            for triplet, count in triplet_counts.items()
+        }
+
+        # Collect indices of clips containing each triplet
+        triplet_clips = defaultdict(list)
+        for idx, row in self.annotations.iterrows():
+            for triplet in ast.literal_eval(row["triplet_label"]):
+                if needed_triplets.get(triplet, 0) > 0:
+                    triplet_clips[triplet].append(idx)
+
+        # Oversample clips
+        new_samples = []
+        for triplet, needed in needed_triplets.items():
+            if needed == 0 or triplet not in triplet_clips:
+                continue
+
+            clips = triplet_clips[triplet]
+
+            # Add extra samples
+            new_samples.extend(random.choices(clips, k=needed))
+
+        # Add new samples to annotations
+        if new_samples:
+            new_df = self.annotations.iloc[new_samples]
+            self.annotations = pd.concat([self.annotations, new_df], ignore_index=True)
+            self.annotations = self.annotations.sample(frac=1).reset_index(drop=True)
+
     def _create_multi_hot(self, label_ids: List[int], category: str) -> torch.Tensor:
         """
         Create a multi-hot encoded tensor for a specific category.
@@ -129,8 +240,13 @@ class MultiTaskVideoDataset(Dataset):
             Multi-hot encoded tensor
         """
         multi_hot = torch.zeros(self.num_classes[category])
-        if label_ids:  # Check if list is not empty
-            multi_hot[label_ids] = 1
+        if label_ids:
+            if category == "triplet":
+                # Map discontinuous triplet IDs to continuous indices
+                continuous_indices = [self.triplet_to_index[lid] for lid in label_ids]
+                multi_hot[continuous_indices] = 1
+            else:
+                multi_hot[label_ids] = 1
         return multi_hot
 
     def get_label_names(self) -> Dict[str, Dict[int, str]]:
@@ -148,10 +264,22 @@ class MultiTaskVideoDataset(Dataset):
 
         # Load video (same as before)
         video_path = f"{self.clips_dir}/{row['file_name']}"
-        video = VideoReader(video_path, width=320, height=180, ctx=cpu(0))
+        video = VideoReader(
+            video_path, width=self.frame_width, height=self.frame_height, ctx=cpu(0)
+        )
 
-        # Sample frames (implementation remains the same as your previous version)
-        indices = np.linspace(0, len(video) - 1, self.clip_length, dtype=int)
+        total_frames = len(video)
+
+        if self.train:
+            # Random temporal sampling
+            start_idx = random.randint(0, total_frames - self.clip_length)
+            indices = np.linspace(
+                start_idx, start_idx + self.clip_length - 1, self.clip_length, dtype=int
+            )
+        else:
+            # Evenly spaced sampling for validation clips
+            indices = np.linspace(0, total_frames - 1, self.clip_length, dtype=int)
+
         frames = video.get_batch(indices).asnumpy()
         # Apply augmentations and preprocessing (same as before)
         if self.train:
@@ -182,7 +310,18 @@ class MultiTaskVideoDataset(Dataset):
             ),
         }
 
-        return frames, labels, idx
+        return frames, labels
+
+    def get_continuous_triplet_mapping(self) -> Tuple[Dict[int, int], Dict[int, int]]:
+        """
+        Get the mapping between original triplet IDs and continuous indices.
+
+        Returns:
+            Tuple containing:
+            - Dict mapping original triplet IDs to continuous indices
+            - Dict mapping continuous indices back to original triplet IDs
+        """
+        return self.triplet_to_index, self.index_to_triplet
 
     @staticmethod
     def calculate_video_mean_std(

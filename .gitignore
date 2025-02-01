@@ -1,6 +1,4 @@
 .venv/
-logs/
-models/
-videos/
-gt.csv
-counts_gt.txt
+03_logs_dir/
+04_models_dir/
+05_datasets_dir/
