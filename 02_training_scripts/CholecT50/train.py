@@ -7,12 +7,12 @@ from pathlib import Path
 
 
 def main():
-    CLIPS_DIR = r"videos"
-    ANNOTATIONS_PATH = r"annotations.csv"
-    CONFIGS_PATH = r"configs.yaml"
+    CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
+    ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
+    CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
 
     dir_name, logger = setup_logging("training")
-    model_dir = Path(f"models/{dir_name}")
+    model_dir = Path(f"04_models_dir/{dir_name}")
     model_dir.mkdir(exist_ok=True)
 
     torch.cuda.set_device(1)
@@ -31,6 +31,7 @@ def main():
         train=True,
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
+        min_occurrences=configs["min_occurrences"],
     )
     val_dataset = MultiTaskVideoDataset(
         clips_dir=CLIPS_DIR,
@@ -41,6 +42,7 @@ def main():
         train=False,
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
+        min_occurrences=configs["min_occurrences"],
     )
     train_loader = DataLoader(
         train_dataset, batch_size=configs["batch_size"], shuffle=True
@@ -54,9 +56,8 @@ def main():
     logger.info("-- Validation Dataset Classes -- ")
     print_and_get_mappings(val_dataset, logger)
     logger.info("-" * 50)
-    print(train_dataset.num_classes)
-    print(val_dataset.num_classes)
-    # print(mappings)
+
+    print()
     trainer = MultiTaskSelfDistillationTrainer(
         num_epochs=configs["num_epochs"],
         train_loader=train_loader,
@@ -68,10 +69,11 @@ def main():
             "target": train_dataset.num_classes["target"],
             "triplet": train_dataset.num_classes["triplet"],
         },
+        triplet_to_ivt=train_dataset.triplet_to_ivt,
         warmup_epochs=configs["warmup_epochs"],
         learning_rate=configs["learning_rate"],
         weight_decay=configs["weight_decay"],
-        # hidden_layers_dim=configs["hidden_layers_dim"],
+        hidden_layer_dim=configs["hidden_layer_dim"],
         device=DEVICE,
         logger=logger,
         dir_name=model_dir,

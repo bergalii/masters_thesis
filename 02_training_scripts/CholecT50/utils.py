@@ -12,7 +12,7 @@ from typing import Dict
 
 def setup_logging(experiment_name: str) -> logging.Logger:
     # Create logs directory
-    log_dir = Path("logs")
+    log_dir = Path("03_logs_dir")
     log_dir.mkdir(exist_ok=True)
 
     # Create log file with timestamp

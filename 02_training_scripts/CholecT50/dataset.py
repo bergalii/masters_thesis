@@ -9,6 +9,7 @@ import albumentations as A
 from torchvision.transforms import Compose, ToTensor, Normalize
 from collections import defaultdict
 import random
+from disentangle import Disentangle
 
 
 class MultiTaskVideoDataset(Dataset):
@@ -22,27 +23,22 @@ class MultiTaskVideoDataset(Dataset):
         train: bool,
         frame_width: int,
         frame_height: int,
-        min_occurrences: int = 100,
+        min_occurrences: int,
     ):
         self.clips_dir = clips_dir
         self.clip_length = clip_length
         self.train = train
         self.split = split
-        self.min_occurrences = min_occurrences
         self.frame_width = frame_width
         self.frame_height = frame_height
-        # Read the annotations
         self.annotations = pd.read_csv(annotations_path)
-
-        # Debugging
-        # self.annotations = pd.read_csv(annotations_path).head(100)
 
         split_indices = self._create_stratified_split(train_ratio)
         self.annotations = self.annotations.iloc[split_indices].reset_index(drop=True)
 
-        # Balance training set
+        # Balance the training set based on minimum occurences for each triplet
         if split == "train":
-            self._balance_dataset()
+            self._balance_dataset(min_occurrences)
 
         # Initialize label name mappings for each category
         self.label_mappings = {
@@ -52,7 +48,7 @@ class MultiTaskVideoDataset(Dataset):
             "triplet": {},
         }
 
-        # Create continuous index mappings for triplets
+        # Create continuous index mappings for triplets to prevent the gaps between the ids
         self.triplet_to_index = {}
         self.index_to_triplet = {}
 
@@ -97,13 +93,20 @@ class MultiTaskVideoDataset(Dataset):
                 triplet_id = row["triplet_label"][triplet_id]
                 self.label_mappings["triplet"][triplet_id] = triplet
 
-        # Calculate num_classes c
+        # Calculate num_classes
         self.num_classes = {
             "instrument": max(self.label_mappings["instrument"].keys()) + 1,
             "verb": max(self.label_mappings["verb"].keys()) + 1,
             "target": max(self.label_mappings["target"].keys()) + 1,
             "triplet": len(self.triplet_to_index),
         }
+
+        # Create reverse mapping from continuous index to original triplet ID
+        self.triplet_continuous_to_original = {
+            v: k for k, v in self.triplet_to_index.items()
+        }
+
+        self._get_triplet_to_ivt_mapping()
 
         # Initialize transforms (same as before)
         self.preprocess = Compose(
@@ -137,6 +140,20 @@ class MultiTaskVideoDataset(Dataset):
                 ),
             ]
         )
+
+    def _get_triplet_to_ivt_mapping(self):
+        """Initialize mapping from continuous triplet IDs to instrument-verb-target labels"""
+        self.triplet_to_ivt = {}
+
+        for continuous_id in range(self.num_classes["triplet"]):
+            # Get original triplet ID
+            original_id = self.triplet_continuous_to_original[continuous_id]
+            original_mapping = Disentangle().bank
+            # Find the row in mappings array
+            row = original_mapping[original_mapping[:, 0] == original_id][0]
+
+            # Store [instrument, verb, target] mapping
+            self.triplet_to_ivt[continuous_id] = [int(row[1]), int(row[2]), int(row[3])]
 
     def _create_stratified_split(self, train_ratio: float) -> np.ndarray:
         """
@@ -190,7 +207,7 @@ class MultiTaskVideoDataset(Dataset):
         else:
             return val_indices
 
-    def _balance_dataset(self):
+    def _balance_dataset(self, min_occurrences):
         """Oversample clips containing underrepresented triplets"""
         triplet_counts = defaultdict(int)
         # Count current triplet occurrences
@@ -200,7 +217,7 @@ class MultiTaskVideoDataset(Dataset):
 
         # Identify triplets needing more samples
         needed_triplets = {
-            triplet: max(self.min_occurrences - count, 0)
+            triplet: max(min_occurrences - count, 0)
             for triplet, count in triplet_counts.items()
         }
 

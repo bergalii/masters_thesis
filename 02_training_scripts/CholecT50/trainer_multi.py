@@ -63,12 +63,14 @@ class MultiTaskSelfDistillationTrainer:
         train_loader,
         val_loader,
         num_classes: dict,
+        triplet_to_ivt: dict,
         label_mappings: dict,
         device,
         logger: logging.Logger,
         dir_name: str,
         learning_rate: float,
         weight_decay: float,
+        hidden_layer_dim: int,
         warmup_epochs: int = 5,
         temperature: float = 2.0,
     ):
@@ -78,9 +80,11 @@ class MultiTaskSelfDistillationTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.num_classes = num_classes
+        self.triplet_to_ivt = triplet_to_ivt
         self.label_mappings = label_mappings
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.hidden_layer_dim = hidden_layer_dim
 
         self.device = device
         self.logger = logger
@@ -203,23 +207,55 @@ class MultiTaskSelfDistillationTrainer:
                 "This method only accepts either the teacher or the student model"
             )
 
-    def _compute_loss(self, outputs, labels, soft_labels=None):
+    def _compute_loss(self, outputs, labels, mode):
         """Compute the combined loss for all tasks"""
         total_loss = 0
         losses = {}
         task_weights = {"verb": 0.5, "instrument": 0.5, "target": 0.5, "triplet": 1.0}
 
-        for task in outputs:
-            # Standard cross-entropy loss
-            loss = F.binary_cross_entropy_with_logits(outputs[task], labels[task])
+        # Convert triplet_to_ivt mapping to tensor
+        triplet_components = torch.tensor(
+            [self.triplet_to_ivt[idx] for idx in range(len(self.triplet_to_ivt))],
+            device=self.device,
+        )  # Shape: (69, 3)
 
-            # Add distillation loss if soft labels are provided
-            if soft_labels and task in soft_labels:
-                distillation_loss = F.binary_cross_entropy_with_logits(
-                    outputs[task], soft_labels[task]
+        for task in outputs:
+            # BCE Loss
+            loss = F.binary_cross_entropy_with_logits(outputs[task], labels[task])
+            # # Add distillation loss for the teacher model
+            # if mode == "student":
+            # distillation_loss = F.binary_cross_entropy_with_logits(
+            #     outputs[task], soft_labels[task]
+            # )
+            # # Gradually include the distillation loss
+            # loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+
+            # Calculate the consistency loss
+            if task == "triplet" and mode == "teacher":
+                # First get the individual component outputs
+                with torch.no_grad():
+                    verb_probs = torch.sigmoid(outputs["verb"])
+                    inst_probs = torch.sigmoid(outputs["instrument"])
+                    target_probs = torch.sigmoid(outputs["target"])
+
+                # Gather indices for all 69 triplets
+                i_idx = triplet_components[:, 0]  # Instrument indices for all triplets
+                v_idx = triplet_components[:, 1]  # Verb indices
+                t_idx = triplet_components[:, 2]  # Target indices
+
+                # Gather probabilities for each triplet component
+                inst_p = inst_probs[:, i_idx]
+                verb_p = verb_probs[:, v_idx]
+                target_p = target_probs[:, t_idx]
+
+                #  This product represents the expected triplet probability
+                product_targets = inst_p * verb_p * target_p
+                # This loss encourages the triplet predictions to align with the component products
+                consistency_loss = F.binary_cross_entropy_with_logits(
+                    outputs["triplet"], product_targets
                 )
-                # Gradually include the distillation loss
-                loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+                # Add this along with the triplet task loss
+                loss += consistency_loss * 0.5
 
             total_loss += task_weights[task] * loss
             losses[task] = loss.item()
@@ -236,7 +272,7 @@ class MultiTaskSelfDistillationTrainer:
             model.train()
             epoch_losses = {}
 
-            for batch_idx, (inputs, labels) in enumerate(self.train_loader):
+            for inputs, labels in self.train_loader:
                 inputs = inputs.to(self.device)
                 # Only the triplet labels for the student model
                 batch_labels = (
@@ -250,21 +286,21 @@ class MultiTaskSelfDistillationTrainer:
 
                 outputs = self._forward_pass(model, inputs, mode)
 
-                # Get batch soft labels if training student
-                batch_soft_labels = (
-                    {
-                        "triplet": soft_labels["triplet"][
-                            batch_idx
-                            * self.train_loader.batch_size : (batch_idx + 1)
-                            * self.train_loader.batch_size
-                        ].to(self.device)
-                    }
-                    if soft_labels
-                    else None
-                )
+                # # Get batch soft labels if training student
+                # batch_soft_labels = (
+                #     {
+                #         "triplet": soft_labels["triplet"][
+                #             batch_idx
+                #             * self.train_loader.batch_size : (batch_idx + 1)
+                #             * self.train_loader.batch_size
+                #         ].to(self.device)
+                #     }
+                #     if soft_labels
+                #     else None
+                # )
 
                 total_loss, task_losses = self._compute_loss(
-                    outputs, batch_labels, batch_soft_labels
+                    outputs, batch_labels, mode
                 )
 
                 optimizer.zero_grad()
@@ -420,6 +456,7 @@ class MultiTaskSelfDistillationTrainer:
         )
         self.logger.info(f"Trainable parameters: {trainable_params_teacher:,}")
         self.logger.info("-" * 50)
+        print("here")
         self._train_model(
             self.teacher_model,
             self.teacher_optimizer,
@@ -427,20 +464,15 @@ class MultiTaskSelfDistillationTrainer:
             "teacher",
         )
 
-        # Generate soft labels
-        self.logger.info("Generating soft labels...")
-        soft_labels = self._generate_soft_labels()
-
-        # Train student model
-        self.logger.info("Training student model...")
-        trainable_params_student = sum(
-            p.numel() for p in self.teacher_model.parameters() if p.requires_grad
-        )
-        self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
-        self._train_model(
-            self.student_model,
-            self.student_optimizer,
-            self.student_scheduler,
-            "student",
-            soft_labels,
-        )
+        # # Train student model
+        # self.logger.info("Training student model...")
+        # trainable_params_student = sum(
+        #     p.numel() for p in self.teacher_model.parameters() if p.requires_grad
+        # )
+        # self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
+        # self._train_model(
+        #     self.student_model,
+        #     self.student_optimizer,
+        #     self.student_scheduler,
+        #     "student",
+        # )
