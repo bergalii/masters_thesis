@@ -4,7 +4,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 import torch.nn as nn
 import logging
-from torchvision.models.video.swin_transformer import swin3d_s, Swin3D_S_Weights
+from torchvision.models.video.swin_transformer import (
+    swin3d_s,
+    Swin3D_S_Weights,
+    swin3d_t,
+    Swin3D_T_Weights,
+)
 from sklearn.metrics import (
     average_precision_score,
     f1_score,
@@ -12,30 +17,63 @@ from sklearn.metrics import (
     recall_score,
 )
 import numpy as np
+import math
 
 
 class CrossAttentionFusion(nn.Module):
-    def __init__(self, feature_dims, common_dim=128):
+    def __init__(self, feature_dims, common_dim=128, num_heads=4):
         super().__init__()
         self.common_dim = common_dim
-        self.query = nn.Linear(feature_dims["verb"], common_dim)
-        self.key = nn.Linear(feature_dims["instrument"], common_dim)
-        self.value = nn.Linear(feature_dims["target"], common_dim)
+        self.num_heads = num_heads
+        self.head_dim = common_dim // num_heads
+
+        # Projections for each feature type
+        self.verb_proj = nn.Linear(feature_dims["verb"], common_dim * 3)
+        self.inst_proj = nn.Linear(feature_dims["instrument"], common_dim * 3)
+        self.target_proj = nn.Linear(feature_dims["target"], common_dim * 3)
+
+        self.output_proj = nn.Linear(common_dim * 3, common_dim)
 
     def forward(self, verb_feat, inst_feat, target_feat):
-        # Project features to common dimension
-        Q = self.query(verb_feat)
-        K = self.key(inst_feat)
-        V = self.value(target_feat)
+        B = verb_feat.size(0)
 
-        # Compute scaled dot-product attention
-        scale_factor = 1.0 / (self.common_dim**0.5)
-        attention_scores = (
-            torch.bmm(Q.unsqueeze(1), K.unsqueeze(1).transpose(1, 2)) * scale_factor
+        # Project each feature type to Q, K, V
+        verb_q, verb_k, verb_v = self.verb_proj(verb_feat).chunk(3, dim=-1)
+        inst_q, inst_k, inst_v = self.inst_proj(inst_feat).chunk(3, dim=-1)
+        target_q, target_k, target_v = self.target_proj(target_feat).chunk(3, dim=-1)
+
+        # Reshape for multi-head attention
+        def reshape(x):
+            return x.view(B, -1, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Compute attention for each combination
+        def attention(q, k, v):
+            scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+            attn = F.softmax(scores, dim=-1)
+            return (attn @ v).transpose(1, 2).reshape(B, -1)
+
+        # Compute three-way attention
+        verb_out = attention(
+            reshape(verb_q),
+            torch.cat([reshape(inst_k), reshape(target_k)], dim=-2),
+            torch.cat([reshape(inst_v), reshape(target_v)], dim=-2),
         )
-        attention = torch.softmax(attention_scores, dim=-1)
 
-        return torch.bmm(attention, V.unsqueeze(1)).squeeze(1)
+        inst_out = attention(
+            reshape(inst_q),
+            torch.cat([reshape(verb_k), reshape(target_k)], dim=-2),
+            torch.cat([reshape(verb_v), reshape(target_v)], dim=-2),
+        )
+
+        target_out = attention(
+            reshape(target_q),
+            torch.cat([reshape(verb_k), reshape(inst_k)], dim=-2),
+            torch.cat([reshape(verb_v), reshape(inst_v)], dim=-2),
+        )
+
+        # Combine and project
+        combined = torch.cat([verb_out, inst_out, target_out], dim=-1)
+        return self.output_proj(combined)
 
 
 class MultiTaskHead(nn.Module):
@@ -124,7 +162,7 @@ class MultiTaskSelfDistillationTrainer:
         self.teacher_model.head = nn.Identity()
 
         # Initialize student model (uses only the triplet head)
-        self.student_model = swin3d_s(weights=Swin3D_S_Weights.DEFAULT).to(self.device)
+        self.student_model = swin3d_t(weights=Swin3D_T_Weights.DEFAULT).to(self.device)
         in_features_student = self.student_model.num_features
         # Student triplet head (uses only the backbone features)
         self.student_model.triplet_head = nn.Sequential(
@@ -202,13 +240,16 @@ class MultiTaskSelfDistillationTrainer:
             # Student's forward pass (only triplet)
             triplet_logits = model.triplet_head(features)
             return {"triplet": triplet_logits}
-        else:
-            raise TypeError(
-                "This method only accepts either the teacher or the student model"
-            )
 
-    def _compute_loss(self, outputs, labels, mode):
-        """Compute the combined loss for all tasks"""
+    def _compute_loss(self, outputs, labels, inputs, mode):
+        """Compute the combined loss for all tasks
+    
+        Args:
+            outputs (dict): Model outputs for each task
+            labels (dict): Ground truth labels for each task
+            inputs (torch.Tensor): Input tensor needed for teacher predictions
+            mode (str): Either "teacher" or "student"
+        """
         total_loss = 0
         losses = {}
         task_weights = {"verb": 0.5, "instrument": 0.5, "target": 0.5, "triplet": 1.0}
@@ -217,42 +258,62 @@ class MultiTaskSelfDistillationTrainer:
         triplet_components = torch.tensor(
             [self.triplet_to_ivt[idx] for idx in range(len(self.triplet_to_ivt))],
             device=self.device,
-        )  # Shape: (69, 3)
+        )
 
         for task in outputs:
-            # BCE Loss
+            # Standard BCE Loss
             loss = F.binary_cross_entropy_with_logits(outputs[task], labels[task])
-            # # Add distillation loss for the teacher model
-            # if mode == "student":
-            # distillation_loss = F.binary_cross_entropy_with_logits(
-            #     outputs[task], soft_labels[task]
-            # )
-            # # Gradually include the distillation loss
-            # loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
-
-            # Calculate the consistency loss
-            if task == "triplet" and mode == "teacher":
-                # First get the individual component outputs
+            # Combine it with distillation loss for the student model
+            if mode == "student":
+                # Get teacher's predictions
+                self.teacher_model.eval()
                 with torch.no_grad():
-                    verb_probs = torch.sigmoid(outputs["verb"])
-                    inst_probs = torch.sigmoid(outputs["instrument"])
-                    target_probs = torch.sigmoid(outputs["target"])
+                    teacher_outputs = self._forward_pass(
+                        self.teacher_model, inputs , "teacher"
+                    )
+                    teacher_logits = teacher_outputs["triplet"]
+                    # Apply temperature scaling
+                    soft_targets = torch.sigmoid(teacher_logits / self.temperature)
+
+                # Calculate distillation loss
+                student_logits = outputs[task] / self.temperature
+                distillation_loss = F.binary_cross_entropy_with_logits(
+                    student_logits, soft_targets
+                ) * (
+                    self.temperature**2
+                )  # Scale the loss back
+
+                #  Gradually include the distillation loss
+                total_loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
+                losses[task] = total_loss.item()
+
+                return total_loss, losses
+
+            # Calculate the consistency loss for the triplet output
+            if task == "triplet" and mode == "teacher":
+                # First get the individual component probabilities
+                with torch.no_grad():
+                    i_probs = torch.sigmoid(outputs["instrument"])
+                    v_probs = torch.sigmoid(outputs["verb"])
+                    t_probs = torch.sigmoid(outputs["target"])
 
                 # Gather indices for all 69 triplets
-                i_idx = triplet_components[:, 0]  # Instrument indices for all triplets
+                i_idx = triplet_components[:, 0]  # Instrument indices
                 v_idx = triplet_components[:, 1]  # Verb indices
                 t_idx = triplet_components[:, 2]  # Target indices
 
-                # Gather probabilities for each triplet component
-                inst_p = inst_probs[:, i_idx]
-                verb_p = verb_probs[:, v_idx]
-                target_p = target_probs[:, t_idx]
+                # Gather individual component probabilities for each triplet
+                i_triplet_probs = i_probs[:, i_idx]
+                v_triplet_probs = v_probs[:, v_idx]
+                t_triplet_probs = t_probs[:, t_idx]
 
-                #  This product represents the expected triplet probability
-                product_targets = inst_p * verb_p * target_p
+                # Compute expected triplet probability using individual components
+                expected_probs_mult = (
+                    i_triplet_probs * v_triplet_probs * t_triplet_probs
+                )
                 # This loss encourages the triplet predictions to align with the component products
                 consistency_loss = F.binary_cross_entropy_with_logits(
-                    outputs["triplet"], product_targets
+                    outputs["triplet"], expected_probs_mult
                 )
                 # Add this along with the triplet task loss
                 loss += consistency_loss * 0.5
@@ -262,7 +323,7 @@ class MultiTaskSelfDistillationTrainer:
 
         return total_loss, losses
 
-    def _train_model(self, model, optimizer, lr_scheduler, mode, soft_labels=None):
+    def _train_model(self, model, optimizer, lr_scheduler, mode):
         """Train either teacher or student model"""
 
         # Track best triplet mAP
@@ -286,21 +347,8 @@ class MultiTaskSelfDistillationTrainer:
 
                 outputs = self._forward_pass(model, inputs, mode)
 
-                # # Get batch soft labels if training student
-                # batch_soft_labels = (
-                #     {
-                #         "triplet": soft_labels["triplet"][
-                #             batch_idx
-                #             * self.train_loader.batch_size : (batch_idx + 1)
-                #             * self.train_loader.batch_size
-                #         ].to(self.device)
-                #     }
-                #     if soft_labels
-                #     else None
-                # )
-
                 total_loss, task_losses = self._compute_loss(
-                    outputs, batch_labels, mode
+                    outputs, batch_labels, inputs, mode
                 )
 
                 optimizer.zero_grad()
@@ -336,19 +384,7 @@ class MultiTaskSelfDistillationTrainer:
                     model.state_dict(), f"{self.dir_name}/best_model_triplet_{mode}.pth"
                 )
                 self.logger.info(f"New best triplet mAP: {triplet_map:.4f}")
-
-    def _generate_soft_labels(self):
-        """Generate soft labels using the trained teacher model"""
-        self.teacher_model.eval()
-        soft_labels = {"triplet": []}
-
-        with torch.no_grad():
-            for inputs, _ in self.train_loader:
-                inputs = inputs.to(self.device)
-                outputs = self._forward_pass(self.teacher_model, inputs, "teacher")
-                soft_labels["triplet"].append(torch.sigmoid(outputs["triplet"]).cpu())
-
-        return {"triplet": torch.cat(soft_labels["triplet"], dim=0)}
+                self.logger.info("-" * 50)
 
     def _validate_model(self, model, mode):
         """Validate model and compute metrics for all tasks"""
@@ -375,88 +411,105 @@ class MultiTaskSelfDistillationTrainer:
             predictions = torch.sigmoid(task_outputs).numpy()
             true_labels = task_labels.numpy()
 
-            task_metrics[task] = {
-                "overall": {
-                    "mAP": average_precision_score(
-                        true_labels, predictions, average="micro"
-                    ),
-                    "macro_AP": average_precision_score(
-                        true_labels, predictions, average="macro"
-                    ),
-                    "weighted_AP": average_precision_score(
-                        true_labels, predictions, average="weighted"
-                    ),
-                },
-                "per_class": {},
-            }
-
-            task_metrics[task]["per_class"] = {}
+            ####################
+            # Calculate AP per class without averaging
             class_aps = average_precision_score(true_labels, predictions, average=None)
 
-            for i in range(len(class_aps)):
-                class_preds = predictions[:, i]
-                class_labels = true_labels[:, i]
-                # Use the index_to_triplet mapping to get the original triplet ID
-                if task == "triplet":
-                    original_id = self.val_loader.dataset.index_to_triplet[i]
-                    label_name = self.label_mappings[task].get(
-                        original_id, f"Class_{original_id}"
-                    )
-                else:
-                    label_name = self.label_mappings[task].get(i, f"Class_{i}")
+            class_aps = self._resolve_nan(class_aps)
 
-                thresholds = np.arange(0.3, 0.7, 0.1)
-                f1_scores = [
-                    f1_score(class_labels, class_preds > t) for t in thresholds
-                ]
-                optimal_threshold = thresholds[np.argmax(f1_scores)]
-                binary_preds = (class_preds > optimal_threshold).astype(int)
-                task_metrics[task]["per_class"][label_name] = {
-                    "AP": class_aps[i],
-                    "precision": precision_score(class_labels, binary_preds),
-                    "recall": recall_score(class_labels, binary_preds),
-                    "f1": f1_score(class_labels, binary_preds),
-                    "optimal_threshold": optimal_threshold,
-                }
+            # Calculate mean AP excluding NaN values
+            mean_ap = np.nanmean(class_aps)
+
+            task_metrics[task] = {"mAP": mean_ap}
 
             # Log metrics
             self.logger.info(f"{task.upper()} METRICS:")
-            self.logger.info(
-                f"  Overall mAP: {task_metrics[task]['overall']['mAP']:.4f}"
-            )
-            self.logger.info(
-                f"  Macro AP: {task_metrics[task]['overall']['macro_AP']:.4f}"
-            )
-            self.logger.info(
-                f"  Weighted AP: {task_metrics[task]['overall']['weighted_AP']:.4f}"
-            )
+            self.logger.info(f"  Overall mAP: {mean_ap:.4f}")
 
-            if "per_class" in task_metrics[task]:
-                for class_name, class_metrics in task_metrics[task][
-                    "per_class"
-                ].items():
-                    self.logger.info(f" {class_name}:")
-                    self.logger.info(f"  AP: {class_metrics['AP']:.4f}")
-                    self.logger.info(f"  F1: {class_metrics['f1']:.4f}")
-                    self.logger.info(f"  Precision: {class_metrics['precision']:.4f}")
-                    self.logger.info(f"  Recall: {class_metrics['recall']:.4f}")
-                    self.logger.info(
-                        f"  Optimal threshold: {class_metrics['optimal_threshold']:.2f}"
-                    )
+        return {task: task_metrics[task]["mAP"] for task in task_metrics}
+        ####################
 
-        # Now we can safely return the overall mAP for each task
-        return {task: task_metrics[task]["overall"]["mAP"] for task in task_metrics}
+        # task_metrics[task] = {
+        #     "overall": {
+        #         "mAP": average_precision_score(
+        #             true_labels, predictions, average="micro"
+        #         ),
+        #         "macro_AP": average_precision_score(
+        #             true_labels, predictions, average="macro"
+        #         ),
+        #         "weighted_AP": average_precision_score(
+        #             true_labels, predictions, average="weighted"
+        #         ),
+        #     },
+        #     "per_class": {},
+        # }
+
+        # task_metrics[task]["per_class"] = {}
+        # class_aps = average_precision_score(true_labels, predictions, average=None)
+
+        #     for i in range(len(class_aps)):
+        #         class_preds = predictions[:, i]
+        #         class_labels = true_labels[:, i]
+        #         # Use the index_to_triplet mapping to get the original triplet ID
+        #         if task == "triplet":
+        #             original_id = self.val_loader.dataset.index_to_triplet[i]
+        #             label_name = self.label_mappings[task].get(
+        #                 original_id, f"Class_{original_id}"
+        #             )
+        #         else:
+        #             label_name = self.label_mappings[task].get(i, f"Class_{i}")
+
+        #         thresholds = np.arange(0.3, 0.7, 0.1)
+        #         f1_scores = [
+        #             f1_score(class_labels, class_preds > t) for t in thresholds
+        #         ]
+        #         optimal_threshold = thresholds[np.argmax(f1_scores)]
+        #         binary_preds = (class_preds > optimal_threshold).astype(int)
+        #         task_metrics[task]["per_class"][label_name] = {
+        #             "AP": class_aps[i],
+        #             "precision": precision_score(class_labels, binary_preds),
+        #             "recall": recall_score(class_labels, binary_preds),
+        #             "f1": f1_score(class_labels, binary_preds),
+        #             "optimal_threshold": optimal_threshold,
+        #         }
+
+        #     # Log metrics
+        #     self.logger.info(f"{task.upper()} METRICS:")
+        #     self.logger.info(
+        #         f"  Overall mAP: {task_metrics[task]['overall']['mAP']:.4f}"
+        #     )
+        #     self.logger.info(
+        #         f"  Macro AP: {task_metrics[task]['overall']['macro_AP']:.4f}"
+        #     )
+        #     self.logger.info(
+        #         f"  Weighted AP: {task_metrics[task]['overall']['weighted_AP']:.4f}"
+        #     )
+
+        #     if "per_class" in task_metrics[task]:
+        #         for class_name, class_metrics in task_metrics[task][
+        #             "per_class"
+        #         ].items():
+        #             self.logger.info(f" {class_name}:")
+        #             self.logger.info(f"  AP: {class_metrics['AP']:.4f}")
+        #             self.logger.info(f"  F1: {class_metrics['f1']:.4f}")
+        #             self.logger.info(f"  Precision: {class_metrics['precision']:.4f}")
+        #             self.logger.info(f"  Recall: {class_metrics['recall']:.4f}")
+        #             self.logger.info(
+        #                 f"  Optimal threshold: {class_metrics['optimal_threshold']:.2f}"
+        #             )
+
+        # return {task: task_metrics[task]["overall"]["mAP"] for task in task_metrics}
 
     def train(self):
         """Execute full training pipeline with self-distillation"""
-        # Train teacher model
+
+        # Train the teacher model
         self.logger.info("Training teacher model...")
         trainable_params_teacher = sum(
             p.numel() for p in self.teacher_model.parameters() if p.requires_grad
         )
         self.logger.info(f"Trainable parameters: {trainable_params_teacher:,}")
         self.logger.info("-" * 50)
-        print("here")
         self._train_model(
             self.teacher_model,
             self.teacher_optimizer,
@@ -464,15 +517,22 @@ class MultiTaskSelfDistillationTrainer:
             "teacher",
         )
 
-        # # Train student model
-        # self.logger.info("Training student model...")
-        # trainable_params_student = sum(
-        #     p.numel() for p in self.teacher_model.parameters() if p.requires_grad
-        # )
-        # self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
-        # self._train_model(
-        #     self.student_model,
-        #     self.student_optimizer,
-        #     self.student_scheduler,
-        #     "student",
-        # )
+        # Train the student model
+        self.logger.info("Training student model...")
+        trainable_params_student = sum(
+            p.numel() for p in self.teacher_model.parameters() if p.requires_grad
+        )
+        self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
+        self._train_model(
+            self.student_model,
+            self.student_optimizer,
+            self.student_scheduler,
+            "student",
+        )
+
+    def _resolve_nan(self, class_aps):
+        equiv_nan = ["-0", "-0.", "-0.0", "-.0"]
+        class_aps = list(map(str, class_aps))
+        class_aps = [np.nan if x in equiv_nan else x for x in class_aps]
+        class_aps = np.array(list(map(float, class_aps)))
+        return class_aps

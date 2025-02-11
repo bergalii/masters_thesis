@@ -5,30 +5,64 @@ from recognition import Recognition
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
 from utils import set_seeds, load_configs
+import math
+import torch.nn.functional as F
 
 
 class CrossAttentionFusion(nn.Module):
-    def __init__(self, feature_dims, common_dim=128):
+    def __init__(self, feature_dims, common_dim=128, num_heads=4):
         super().__init__()
         self.common_dim = common_dim
-        self.query = nn.Linear(feature_dims["verb"], common_dim)
-        self.key = nn.Linear(feature_dims["instrument"], common_dim)
-        self.value = nn.Linear(feature_dims["target"], common_dim)
+        self.num_heads = num_heads
+        self.head_dim = common_dim // num_heads
+
+        # Projections for each feature type
+        self.verb_proj = nn.Linear(feature_dims["verb"], common_dim * 3)
+        self.inst_proj = nn.Linear(feature_dims["instrument"], common_dim * 3)
+        self.target_proj = nn.Linear(feature_dims["target"], common_dim * 3)
+
+        self.output_proj = nn.Linear(common_dim * 3, common_dim)
 
     def forward(self, verb_feat, inst_feat, target_feat):
-        # Project features to common dimension
-        Q = self.query(verb_feat)
-        K = self.key(inst_feat)
-        V = self.value(target_feat)
+        B = verb_feat.size(0)
 
-        # Compute scaled dot-product attention
-        scale_factor = 1.0 / (self.common_dim**0.5)
-        attention_scores = (
-            torch.bmm(Q.unsqueeze(1), K.unsqueeze(1).transpose(1, 2)) * scale_factor
+        # Project each feature type to Q, K, V
+        verb_q, verb_k, verb_v = self.verb_proj(verb_feat).chunk(3, dim=-1)
+        inst_q, inst_k, inst_v = self.inst_proj(inst_feat).chunk(3, dim=-1)
+        target_q, target_k, target_v = self.target_proj(target_feat).chunk(3, dim=-1)
+
+        # Reshape for multi-head attention
+        def reshape(x):
+            return x.view(B, -1, self.num_heads, self.head_dim).transpose(1, 2)
+
+        # Compute attention for each combination
+        def attention(q, k, v):
+            scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+            attn = F.softmax(scores, dim=-1)
+            return (attn @ v).transpose(1, 2).reshape(B, -1)
+
+        # Compute three-way attention
+        verb_out = attention(
+            reshape(verb_q),
+            torch.cat([reshape(inst_k), reshape(target_k)], dim=-2),
+            torch.cat([reshape(inst_v), reshape(target_v)], dim=-2),
         )
-        attention = torch.softmax(attention_scores, dim=-1)
 
-        return torch.bmm(attention, V.unsqueeze(1)).squeeze(1)
+        inst_out = attention(
+            reshape(inst_q),
+            torch.cat([reshape(verb_k), reshape(target_k)], dim=-2),
+            torch.cat([reshape(verb_v), reshape(target_v)], dim=-2),
+        )
+
+        target_out = attention(
+            reshape(target_q),
+            torch.cat([reshape(verb_k), reshape(inst_k)], dim=-2),
+            torch.cat([reshape(verb_v), reshape(inst_v)], dim=-2),
+        )
+
+        # Combine and project
+        combined = torch.cat([verb_out, inst_out, target_out], dim=-1)
+        return self.output_proj(combined)
 
 
 class MultiTaskHead(nn.Module):
@@ -84,7 +118,6 @@ class ModelValidator:
         # Teacher triplet head combines the ivt heads output features
         common_dim = self.cross_attention.common_dim
         total_input_size = in_features + sum(self.feature_dims.values()) + common_dim
-        print(total_input_size)
         model.triplet_head = nn.Sequential(
             nn.LayerNorm(total_input_size),
             nn.Dropout(p=0.5),
@@ -145,21 +178,17 @@ class ModelValidator:
             for inputs, batch_labels in self.val_loader:
                 inputs = inputs.to(self.device)
                 model_outputs = self._forward_pass(inputs)
-
-                # Process triplet predictions
                 predictions = torch.sigmoid(model_outputs["triplet"]).cpu().numpy()
                 true_labels = batch_labels["triplet"].cpu().numpy()
-
-                # Update metrics
                 recognize.update(true_labels, predictions)
-                recognize.video_end()
 
         # Compute and log final metrics
-        results = {}
-        results["instrument"] = recognize.compute_video_AP("i")
-        results["verb"] = recognize.compute_video_AP("v")
-        results["target"] = recognize.compute_video_AP("t")
-        results["triplet"] = recognize.compute_video_AP("ivt")
+        results = {
+            "triplet": recognize.compute_global_AP("ivt"),
+            "verb": recognize.compute_global_AP("v"),
+            "instrument": recognize.compute_global_AP("i"),
+            "target": recognize.compute_global_AP("t"),
+        }
 
         print("\nValidation Results:")
         for task in ["verb", "instrument", "target", "triplet"]:
@@ -173,7 +202,7 @@ def main():
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
     MODEL_PATH = (
-        r"04_models_dir/training_20250130_172232/best_model_triplet_teacher.pth"
+        r"04_models_dir/training_20250205_234859/best_model_triplet_teacher.pth"
     )
 
     torch.cuda.set_device(1)
@@ -190,6 +219,7 @@ def main():
         train=False,
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
+        min_occurrences=configs["min_occurrences"],
     )
 
     val_loader = DataLoader(

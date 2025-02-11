@@ -266,12 +266,6 @@ class MultiTaskVideoDataset(Dataset):
                 multi_hot[label_ids] = 1
         return multi_hot
 
-    def get_label_names(self) -> Dict[str, Dict[int, str]]:
-        """
-        Get the mapping of label IDs to their names for each category.
-        """
-        return self.label_mappings
-
     def __len__(self) -> int:
         return len(self.annotations)
 
@@ -288,11 +282,27 @@ class MultiTaskVideoDataset(Dataset):
         total_frames = len(video)
 
         if self.train:
-            # Random temporal sampling
-            start_idx = random.randint(0, total_frames - self.clip_length)
-            indices = np.linspace(
-                start_idx, start_idx + self.clip_length - 1, self.clip_length, dtype=int
-            )
+            # Calculate the ranges for start and end indices
+            total_frames = len(video)
+            start_range = int(total_frames * 0.1)  # First 10% of frames
+            end_range = int(total_frames * 0.9)  # Last 10% of frames
+            # Ensure we have enough frames between start and end for the clip
+            if end_range - start_range < self.clip_length:
+                # Random temporal sampling
+                start_idx = random.randint(0, total_frames - self.clip_length)
+                indices = np.linspace(
+                    start_idx,
+                    start_idx + self.clip_length - 1,
+                    self.clip_length,
+                    dtype=int,
+                )
+            else:
+                # Sample start frame from first 10%
+                start_idx = random.randint(0, start_range)
+                # Sample end frame from last 10%
+                end_idx = random.randint(end_range, total_frames - 1)
+                # Create evenly spaced indices between start and end
+                indices = np.linspace(start_idx, end_idx, self.clip_length, dtype=int)
         else:
             # Evenly spaced sampling for validation clips
             indices = np.linspace(0, total_frames - 1, self.clip_length, dtype=int)
@@ -311,7 +321,7 @@ class MultiTaskVideoDataset(Dataset):
         frames = torch.stack([self.preprocess(frame) for frame in frames])
         frames = frames.permute(1, 0, 2, 3)  # (C, T, H, W)
 
-        # Create multi-hot encoded labels for each category
+        # Create multi-hot encoded labels for each task
         labels = {
             "instrument": self._create_multi_hot(
                 ast.literal_eval(str(row["instrument_label"])), "instrument"
@@ -328,17 +338,6 @@ class MultiTaskVideoDataset(Dataset):
         }
 
         return frames, labels
-
-    def get_continuous_triplet_mapping(self) -> Tuple[Dict[int, int], Dict[int, int]]:
-        """
-        Get the mapping between original triplet IDs and continuous indices.
-
-        Returns:
-            Tuple containing:
-            - Dict mapping original triplet IDs to continuous indices
-            - Dict mapping continuous indices back to original triplet IDs
-        """
-        return self.triplet_to_index, self.index_to_triplet
 
     @staticmethod
     def calculate_video_mean_std(

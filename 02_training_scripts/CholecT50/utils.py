@@ -70,7 +70,7 @@ def get_label_counts(dataset, category) -> Dict:
 
 
 def print_and_get_mappings(dataset, logger: logging.Logger) -> Dict:
-    mappings = dataset.get_label_names()
+    mappings = dataset.label_mappings
     all_mappings = {}
 
     for category in ["instrument", "verb", "target", "triplet"]:
