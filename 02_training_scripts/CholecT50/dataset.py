@@ -284,8 +284,8 @@ class MultiTaskVideoDataset(Dataset):
         if self.train:
             # Calculate the ranges for start and end indices
             total_frames = len(video)
-            start_range = int(total_frames * 0.1)  # First 10% of frames
-            end_range = int(total_frames * 0.9)  # Last 10% of frames
+            start_range = int(total_frames * 0.2)  # First 20% of frames
+            end_range = int(total_frames * 0.8)  # Last 20% of frames
             # Ensure we have enough frames between start and end for the clip
             if end_range - start_range < self.clip_length:
                 # Random temporal sampling

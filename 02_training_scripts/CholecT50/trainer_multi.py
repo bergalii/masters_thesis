@@ -16,64 +16,38 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+from modules import CustomSwin3D
 import numpy as np
-import math
 
 
-class CrossAttentionFusion(nn.Module):
-    def __init__(self, feature_dims, common_dim=128, num_heads=4):
+class AttentionModule(nn.Module):
+    def __init__(self, feature_dims, num_layers=2, num_heads=4, common_dim=256):
         super().__init__()
         self.common_dim = common_dim
-        self.num_heads = num_heads
-        self.head_dim = common_dim // num_heads
+        self.component_embeddings = nn.ModuleDict(
+            {k: nn.Linear(v, common_dim) for k, v in feature_dims.items()}
+        )
 
-        # Projections for each feature type
-        self.verb_proj = nn.Linear(feature_dims["verb"], common_dim * 3)
-        self.inst_proj = nn.Linear(feature_dims["instrument"], common_dim * 3)
-        self.target_proj = nn.Linear(feature_dims["target"], common_dim * 3)
-
-        self.output_proj = nn.Linear(common_dim * 3, common_dim)
+        encoder_layer = nn.TransformerEncoderLayer(
+            common_dim, num_heads, dim_feedforward=4 * common_dim, batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
 
     def forward(self, verb_feat, inst_feat, target_feat):
-        B = verb_feat.size(0)
+        # Project features to common space
+        verb_emb = self.component_embeddings["verb"](verb_feat).unsqueeze(1)
+        inst_emb = self.component_embeddings["instrument"](inst_feat).unsqueeze(1)
+        target_emb = self.component_embeddings["target"](target_feat).unsqueeze(1)
 
-        # Project each feature type to Q, K, V
-        verb_q, verb_k, verb_v = self.verb_proj(verb_feat).chunk(3, dim=-1)
-        inst_q, inst_k, inst_v = self.inst_proj(inst_feat).chunk(3, dim=-1)
-        target_q, target_k, target_v = self.target_proj(target_feat).chunk(3, dim=-1)
+        # Concatenate as sequence tokens
+        tokens = torch.cat([verb_emb, inst_emb, target_emb], dim=1)
 
-        # Reshape for multi-head attention
-        def reshape(x):
-            return x.view(B, -1, self.num_heads, self.head_dim).transpose(1, 2)
+        # Process through transformer
+        transformed = self.transformer(tokens)
 
-        # Compute attention for each combination
-        def attention(q, k, v):
-            scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-            attn = F.softmax(scores, dim=-1)
-            return (attn @ v).transpose(1, 2).reshape(B, -1)
-
-        # Compute three-way attention
-        verb_out = attention(
-            reshape(verb_q),
-            torch.cat([reshape(inst_k), reshape(target_k)], dim=-2),
-            torch.cat([reshape(inst_v), reshape(target_v)], dim=-2),
-        )
-
-        inst_out = attention(
-            reshape(inst_q),
-            torch.cat([reshape(verb_k), reshape(target_k)], dim=-2),
-            torch.cat([reshape(verb_v), reshape(target_v)], dim=-2),
-        )
-
-        target_out = attention(
-            reshape(target_q),
-            torch.cat([reshape(verb_k), reshape(inst_k)], dim=-2),
-            torch.cat([reshape(verb_v), reshape(inst_v)], dim=-2),
-        )
-
-        # Combine and project
-        combined = torch.cat([verb_out, inst_out, target_out], dim=-1)
-        return self.output_proj(combined)
+        # Flatten the sequence dimension
+        batch_size = transformed.size(0)
+        return transformed.reshape(batch_size, -1)
 
 
 class MultiTaskHead(nn.Module):
@@ -111,6 +85,7 @@ class MultiTaskSelfDistillationTrainer:
         hidden_layer_dim: int,
         warmup_epochs: int = 5,
         temperature: float = 2.0,
+        guidance_scale: float = 0.8,
     ):
         self.num_epochs = num_epochs
         self.alpha = min(1.0, num_epochs / warmup_epochs)
@@ -118,24 +93,44 @@ class MultiTaskSelfDistillationTrainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.num_classes = num_classes
-        self.triplet_to_ivt = triplet_to_ivt
         self.label_mappings = label_mappings
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.hidden_layer_dim = hidden_layer_dim
+        self.guidance_scale = guidance_scale
 
         self.device = device
         self.logger = logger
         self.dir_name = dir_name
 
+        self.triplet_to_ivt = torch.tensor(
+            [triplet_to_ivt[idx] for idx in range(len(triplet_to_ivt))],
+            device=device,
+        )
+        self.MI = torch.zeros(
+            (self.num_classes["instrument"], self.num_classes["triplet"])
+        ).to(device)
+        self.MV = torch.zeros(
+            (self.num_classes["verb"], self.num_classes["triplet"])
+        ).to(device)
+        self.MT = torch.zeros(
+            (self.num_classes["target"], self.num_classes["triplet"])
+        ).to(device)
+        for t, (inst, verb, target) in triplet_to_ivt.items():
+            self.MI[inst, t] = 1
+            self.MV[verb, t] = 1
+            self.MT[target, t] = 1
+
         self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
-        self.cross_attention = CrossAttentionFusion(self.feature_dims).to(self.device)
+        self.attention_module = AttentionModule(self.feature_dims).to(self.device)
         self._configure_models()
 
     def _configure_models(self):
         # Initialize the teacher model
-        self.teacher_model = swin3d_s(weights=Swin3D_S_Weights.DEFAULT).to(self.device)
-        in_features = self.teacher_model.num_features
+        # self.teacher_model = swin3d_s(weights=Swin3D_S_Weights.DEFAULT).to(self.device)
+        # in_features = self.teacher_model.num_features
+        self.teacher_model = CustomSwin3D().to(self.device)
+        in_features = self.teacher_model.out_channels
         # Teacher heads
         self.teacher_model.verb_head = MultiTaskHead(
             in_features, self.num_classes["verb"]
@@ -148,8 +143,10 @@ class MultiTaskSelfDistillationTrainer:
         ).to(self.device)
 
         # Teacher triplet head combines the ivt heads output features
-        common_dim = self.cross_attention.common_dim
-        total_input_size = in_features + sum(self.feature_dims.values()) + common_dim
+        common_dim = self.attention_module.common_dim
+        total_input_size = (
+            in_features + sum(self.feature_dims.values()) + 3 * common_dim
+        )
         self.teacher_model.triplet_head = nn.Sequential(
             nn.LayerNorm(total_input_size),
             nn.Dropout(p=0.5),
@@ -159,7 +156,7 @@ class MultiTaskSelfDistillationTrainer:
             nn.Linear(512, self.num_classes["triplet"]),
         ).to(self.device)
         # We need to remove the original classification head
-        self.teacher_model.head = nn.Identity()
+        # self.teacher_model.head = nn.Identity()
 
         # Initialize student model (uses only the triplet head)
         self.student_model = swin3d_t(weights=Swin3D_T_Weights.DEFAULT).to(self.device)
@@ -213,7 +210,7 @@ class MultiTaskSelfDistillationTrainer:
             instrument_logits = model.instrument_head(features)
             target_logits = model.target_head(features)
             # Apply cross-attention fusion
-            attention_output = self.cross_attention(
+            attention_output = self.attention_module(
                 verb_logits, instrument_logits, target_logits
             )
             # Combine all features for triplet prediction
@@ -223,12 +220,11 @@ class MultiTaskSelfDistillationTrainer:
                     verb_logits,  # verb predictions
                     instrument_logits,  # instrument predictions
                     target_logits,  # target predictions
-                    attention_output,  # attention-fused features
+                    attention_output,  # features from the attention module
                 ],
                 dim=1,
             )
             triplet_logits = model.triplet_head(combined_features)
-
             return {
                 "verb": verb_logits,
                 "instrument": instrument_logits,
@@ -243,7 +239,7 @@ class MultiTaskSelfDistillationTrainer:
 
     def _compute_loss(self, outputs, labels, inputs, mode):
         """Compute the combined loss for all tasks
-    
+
         Args:
             outputs (dict): Model outputs for each task
             labels (dict): Ground truth labels for each task
@@ -254,12 +250,6 @@ class MultiTaskSelfDistillationTrainer:
         losses = {}
         task_weights = {"verb": 0.5, "instrument": 0.5, "target": 0.5, "triplet": 1.0}
 
-        # Convert triplet_to_ivt mapping to tensor
-        triplet_components = torch.tensor(
-            [self.triplet_to_ivt[idx] for idx in range(len(self.triplet_to_ivt))],
-            device=self.device,
-        )
-
         for task in outputs:
             # Standard BCE Loss
             loss = F.binary_cross_entropy_with_logits(outputs[task], labels[task])
@@ -269,7 +259,7 @@ class MultiTaskSelfDistillationTrainer:
                 self.teacher_model.eval()
                 with torch.no_grad():
                     teacher_outputs = self._forward_pass(
-                        self.teacher_model, inputs , "teacher"
+                        self.teacher_model, inputs, "teacher"
                     )
                     teacher_logits = teacher_outputs["triplet"]
                     # Apply temperature scaling
@@ -288,35 +278,6 @@ class MultiTaskSelfDistillationTrainer:
                 losses[task] = total_loss.item()
 
                 return total_loss, losses
-
-            # Calculate the consistency loss for the triplet output
-            if task == "triplet" and mode == "teacher":
-                # First get the individual component probabilities
-                with torch.no_grad():
-                    i_probs = torch.sigmoid(outputs["instrument"])
-                    v_probs = torch.sigmoid(outputs["verb"])
-                    t_probs = torch.sigmoid(outputs["target"])
-
-                # Gather indices for all 69 triplets
-                i_idx = triplet_components[:, 0]  # Instrument indices
-                v_idx = triplet_components[:, 1]  # Verb indices
-                t_idx = triplet_components[:, 2]  # Target indices
-
-                # Gather individual component probabilities for each triplet
-                i_triplet_probs = i_probs[:, i_idx]
-                v_triplet_probs = v_probs[:, v_idx]
-                t_triplet_probs = t_probs[:, t_idx]
-
-                # Compute expected triplet probability using individual components
-                expected_probs_mult = (
-                    i_triplet_probs * v_triplet_probs * t_triplet_probs
-                )
-                # This loss encourages the triplet predictions to align with the component products
-                consistency_loss = F.binary_cross_entropy_with_logits(
-                    outputs["triplet"], expected_probs_mult
-                )
-                # Add this along with the triplet task loss
-                loss += consistency_loss * 0.5
 
             total_loss += task_weights[task] * loss
             losses[task] = loss.item()
@@ -390,31 +351,60 @@ class MultiTaskSelfDistillationTrainer:
         """Validate model and compute metrics for all tasks"""
 
         model.eval()
-        outputs = {}
-        labels = {}
+        all_predictions = {}
+        all_labels = {}
 
         with torch.no_grad():
             for inputs, batch_labels in self.val_loader:
                 inputs = inputs.to(self.device)
                 model_outputs = self._forward_pass(model, inputs, mode)
-                for task in model_outputs:
-                    if task not in outputs:
-                        outputs[task] = []
-                        labels[task] = []
-                    outputs[task].append(model_outputs[task].cpu())
-                    labels[task].append(batch_labels[task].cpu())
+
+                # Convert all outputs to probabilities at once
+                task_probabilities = {
+                    task: torch.sigmoid(outputs)
+                    for task, outputs in model_outputs.items()
+                }
+
+                # Apply guidance if it is the teacher model
+                if mode == "teacher":
+                    # Get guidance from individual tasks
+                    guidance_inst = torch.matmul(
+                        task_probabilities["instrument"], self.MI
+                    )
+                    guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
+                    guidance_target = torch.matmul(
+                        task_probabilities["target"], self.MT
+                    )
+
+                    # Combine guidance signals
+                    guidance = guidance_inst * guidance_verb * guidance_target
+
+                    # Apply guidance with a scale factor
+                    guided_triplet_probs = (
+                        1 - self.guidance_scale
+                    ) * task_probabilities["triplet"] + self.guidance_scale * (
+                        guidance * task_probabilities["triplet"]
+                    )
+
+                    # Update the triplet predictions with guided probabilities
+                    task_probabilities["triplet"] = guided_triplet_probs
+
+                # Store probabilities and labels
+                for task in task_probabilities:
+                    if task not in all_predictions:
+                        all_predictions[task] = []
+                        all_labels[task] = []
+                    all_predictions[task].append(task_probabilities[task].cpu())
+                    all_labels[task].append(batch_labels[task].cpu())
 
         task_metrics = {}
-        for task in outputs:
-            task_outputs = torch.cat(outputs[task], dim=0)
-            task_labels = torch.cat(labels[task], dim=0)
-            predictions = torch.sigmoid(task_outputs).numpy()
-            true_labels = task_labels.numpy()
+        for task in all_predictions:
+            predictions = torch.cat(all_predictions[task], dim=0).numpy()
+            labels = torch.cat(all_labels[task], dim=0).numpy()
 
             ####################
             # Calculate AP per class without averaging
-            class_aps = average_precision_score(true_labels, predictions, average=None)
-
+            class_aps = average_precision_score(labels, predictions, average=None)
             class_aps = self._resolve_nan(class_aps)
 
             # Calculate mean AP excluding NaN values

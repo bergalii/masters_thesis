@@ -5,82 +5,7 @@ from recognition import Recognition
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
 from utils import set_seeds, load_configs
-import math
-import torch.nn.functional as F
-
-
-class CrossAttentionFusion(nn.Module):
-    def __init__(self, feature_dims, common_dim=128, num_heads=4):
-        super().__init__()
-        self.common_dim = common_dim
-        self.num_heads = num_heads
-        self.head_dim = common_dim // num_heads
-
-        # Projections for each feature type
-        self.verb_proj = nn.Linear(feature_dims["verb"], common_dim * 3)
-        self.inst_proj = nn.Linear(feature_dims["instrument"], common_dim * 3)
-        self.target_proj = nn.Linear(feature_dims["target"], common_dim * 3)
-
-        self.output_proj = nn.Linear(common_dim * 3, common_dim)
-
-    def forward(self, verb_feat, inst_feat, target_feat):
-        B = verb_feat.size(0)
-
-        # Project each feature type to Q, K, V
-        verb_q, verb_k, verb_v = self.verb_proj(verb_feat).chunk(3, dim=-1)
-        inst_q, inst_k, inst_v = self.inst_proj(inst_feat).chunk(3, dim=-1)
-        target_q, target_k, target_v = self.target_proj(target_feat).chunk(3, dim=-1)
-
-        # Reshape for multi-head attention
-        def reshape(x):
-            return x.view(B, -1, self.num_heads, self.head_dim).transpose(1, 2)
-
-        # Compute attention for each combination
-        def attention(q, k, v):
-            scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-            attn = F.softmax(scores, dim=-1)
-            return (attn @ v).transpose(1, 2).reshape(B, -1)
-
-        # Compute three-way attention
-        verb_out = attention(
-            reshape(verb_q),
-            torch.cat([reshape(inst_k), reshape(target_k)], dim=-2),
-            torch.cat([reshape(inst_v), reshape(target_v)], dim=-2),
-        )
-
-        inst_out = attention(
-            reshape(inst_q),
-            torch.cat([reshape(verb_k), reshape(target_k)], dim=-2),
-            torch.cat([reshape(verb_v), reshape(target_v)], dim=-2),
-        )
-
-        target_out = attention(
-            reshape(target_q),
-            torch.cat([reshape(verb_k), reshape(inst_k)], dim=-2),
-            torch.cat([reshape(verb_v), reshape(inst_v)], dim=-2),
-        )
-
-        # Combine and project
-        combined = torch.cat([verb_out, inst_out, target_out], dim=-1)
-        return self.output_proj(combined)
-
-
-class MultiTaskHead(nn.Module):
-    """Classification head for each task (verb, instrument, target)"""
-
-    def __init__(self, in_features: int, num_classes: int):
-        super().__init__()
-        self.head = nn.Sequential(
-            nn.LayerNorm(in_features),
-            nn.Dropout(p=0.5),
-            nn.Linear(in_features, 512),
-            nn.GELU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(512, num_classes),
-        )
-
-    def forward(self, x):
-        return self.head(x)
+from modules import MultiTaskHead, AttentionModule
 
 
 class ModelValidator:
@@ -90,13 +15,34 @@ class ModelValidator:
         num_classes: dict,
         device: str,
         model_path: str,
+        triplet_to_ivt: dict,
+        guidance_scale: float = 0.8,
     ):
         self.val_loader = val_loader
         self.num_classes = num_classes
         self.device = device
         self.model_path = model_path
+        self.guidance_scale = guidance_scale
+        self.triplet_to_ivt = torch.tensor(
+            [triplet_to_ivt[idx] for idx in range(len(triplet_to_ivt))],
+            device=device,
+        )
+        self.MI = torch.zeros(
+            (self.num_classes["instrument"], self.num_classes["triplet"])
+        ).to(device)
+        self.MV = torch.zeros(
+            (self.num_classes["verb"], self.num_classes["triplet"])
+        ).to(device)
+        self.MT = torch.zeros(
+            (self.num_classes["target"], self.num_classes["triplet"])
+        ).to(device)
+        for t, (inst, verb, target) in triplet_to_ivt.items():
+            self.MI[inst, t] = 1
+            self.MV[verb, t] = 1
+            self.MT[target, t] = 1
+
         self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
-        self.cross_attention = CrossAttentionFusion(self.feature_dims).to(self.device)
+        self.cross_attention = AttentionModule(self.feature_dims).to(self.device)
         # Initialize and load the model
         self.model = self._initialize_model()
 
@@ -117,7 +63,9 @@ class ModelValidator:
 
         # Teacher triplet head combines the ivt heads output features
         common_dim = self.cross_attention.common_dim
-        total_input_size = in_features + sum(self.feature_dims.values()) + common_dim
+        total_input_size = (
+            in_features + sum(self.feature_dims.values()) + 3 * common_dim
+        )
         model.triplet_head = nn.Sequential(
             nn.LayerNorm(total_input_size),
             nn.Dropout(p=0.5),
@@ -178,7 +126,25 @@ class ModelValidator:
             for inputs, batch_labels in self.val_loader:
                 inputs = inputs.to(self.device)
                 model_outputs = self._forward_pass(inputs)
-                predictions = torch.sigmoid(model_outputs["triplet"]).cpu().numpy()
+                # Convert all outputs to probabilities at once
+                task_probabilities = {
+                    task: torch.sigmoid(outputs)
+                    for task, outputs in model_outputs.items()
+                }
+
+                guidance_inst = torch.matmul(task_probabilities["instrument"], self.MI)
+                guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
+                guidance_target = torch.matmul(task_probabilities["target"], self.MT)
+
+                # Combine guidance signals
+                guidance = guidance_inst * guidance_verb * guidance_target
+
+                # Apply guidance with a scale factor
+                guided_probs = (1 - self.guidance_scale) * task_probabilities[
+                    "triplet"
+                ] + self.guidance_scale * (guidance * task_probabilities["triplet"])
+
+                predictions = guided_probs.cpu().numpy()
                 true_labels = batch_labels["triplet"].cpu().numpy()
                 recognize.update(true_labels, predictions)
 
@@ -202,7 +168,7 @@ def main():
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
     MODEL_PATH = (
-        r"04_models_dir/training_20250205_234859/best_model_triplet_teacher.pth"
+        r"04_models_dir/training_20250217_103632/best_model_triplet_teacher.pth"
     )
 
     torch.cuda.set_device(1)
@@ -238,6 +204,7 @@ def main():
         num_classes=num_classes,
         device=DEVICE,
         model_path=MODEL_PATH,
+        triplet_to_ivt=val_dataset.triplet_to_ivt,
     )
 
     # Run validation
