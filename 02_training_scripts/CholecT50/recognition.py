@@ -1,20 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-An python implementation recognition AP for surgical action triplet evaluation.
-Created on Thu Dec 30 12:37:56 2021
-@author: nwoye chinedu i.
-(c) icube, unistra
-"""
-# %%%%%%%% imports %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 import numpy as np
 from sklearn.metrics import average_precision_score
 import warnings
 import sys
 from disentangle import Disentangle
 
-
-# %%%%%%%%%% RECOGNITION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 class Recognition(Disentangle):
     """
     Class: compute (mean) Average Precision

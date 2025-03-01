@@ -6,12 +6,14 @@ from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
 from utils import set_seeds, load_configs
 from modules import MultiTaskHead, AttentionModule
+from collections import defaultdict
 
 
 class ModelValidator:
     def __init__(
         self,
         val_loader,
+        val_dataset,
         num_classes: dict,
         device: str,
         model_path: str,
@@ -19,6 +21,7 @@ class ModelValidator:
         guidance_scale: float = 0.8,
     ):
         self.val_loader = val_loader
+        self.val_dataset = val_dataset
         self.num_classes = num_classes
         self.device = device
         self.model_path = model_path
@@ -118,49 +121,84 @@ class ModelValidator:
         """Validate the model and compute metrics"""
         self.model.eval()
 
-        # Initialize ivtmetrics Recognition object
+        # Get all unique video IDs
+        video_ids = list(set([item["video_id"] for _, item in self.val_dataset]))
+
+        # Initialize recognition object
         recognize = Recognition(num_class=self.num_classes["triplet"])
         recognize.reset_global()
 
+        # Group samples by video_id
+        video_samples = defaultdict(list)
+        for i in range(len(self.val_dataset)):
+            _, labels = self.val_dataset[i]
+            video_id = labels["video_id"]
+            video_samples[video_id].append(i)
+
         with torch.no_grad():
-            for inputs, batch_labels in self.val_loader:
-                inputs = inputs.to(self.device)
-                model_outputs = self._forward_pass(inputs)
-                # Convert all outputs to probabilities at once
-                task_probabilities = {
-                    task: torch.sigmoid(outputs)
-                    for task, outputs in model_outputs.items()
-                }
+            # Process each video separately
+            for video_id in video_ids:
+                # Process all clips from this video
+                for idx in video_samples[video_id]:
+                    inputs, batch_labels = self.val_dataset[idx]
+                    # Add batch dimension
+                    inputs = inputs.unsqueeze(0).to(self.device)
 
-                guidance_inst = torch.matmul(task_probabilities["instrument"], self.MI)
-                guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
-                guidance_target = torch.matmul(task_probabilities["target"], self.MT)
+                    model_outputs = self._forward_pass(inputs)
+                    # Convert all outputs to probabilities at once
+                    task_probabilities = {
+                        task: torch.sigmoid(outputs)
+                        for task, outputs in model_outputs.items()
+                    }
 
-                # Combine guidance signals
-                guidance = guidance_inst * guidance_verb * guidance_target
+                    guidance_inst = torch.matmul(
+                        task_probabilities["instrument"], self.MI
+                    )
+                    guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
+                    guidance_target = torch.matmul(
+                        task_probabilities["target"], self.MT
+                    )
 
-                # Apply guidance with a scale factor
-                guided_probs = (1 - self.guidance_scale) * task_probabilities[
-                    "triplet"
-                ] + self.guidance_scale * (guidance * task_probabilities["triplet"])
+                    # Combine guidance signals
+                    guidance = guidance_inst * guidance_verb * guidance_target
 
-                predictions = guided_probs.cpu().numpy()
-                true_labels = batch_labels["triplet"].cpu().numpy()
-                recognize.update(true_labels, predictions)
+                    # Apply guidance with a scale factor
+                    guided_probs = (1 - self.guidance_scale) * task_probabilities[
+                        "triplet"
+                    ] + self.guidance_scale * (guidance * task_probabilities["triplet"])
 
-        # Compute and log final metrics
+                    predictions = guided_probs.cpu().numpy()
+                    true_labels = batch_labels["triplet"].unsqueeze(0).cpu().numpy()
+                    recognize.update(true_labels, predictions)
+
+                # Signal end of video to the Recognition evaluator
+                recognize.video_end()
+
+        # Compute video-level AP metrics
         results = {
-            "triplet": recognize.compute_global_AP("ivt"),
-            "verb": recognize.compute_global_AP("v"),
-            "instrument": recognize.compute_global_AP("i"),
-            "target": recognize.compute_global_AP("t"),
+            "triplet": recognize.compute_video_AP("ivt", ignore_null=True),
+            "verb": recognize.compute_video_AP("v", ignore_null=True),
+            "instrument": recognize.compute_video_AP("i", ignore_null=True),
+            "target": recognize.compute_video_AP("t", ignore_null=True),
         }
 
-        print("\nValidation Results:")
+        print("\nVideo-level Validation Results:")
         for task in ["verb", "instrument", "target", "triplet"]:
             print(f"{task.capitalize()} Results:")
-            print(f"mAP: {results[task]['mAP']:.4f}")
-            print(f"AP: {results[task]['AP']}")
+            print(f"Video-level mAP: {results[task]['mAP']:.4f}")
+            print(f"Video-level AP: {results[task]['AP']}")
+
+        global_results = {
+            "triplet": recognize.compute_global_AP("ivt", ignore_null=True),
+            "verb": recognize.compute_global_AP("v", ignore_null=True),
+            "instrument": recognize.compute_global_AP("i", ignore_null=True),
+            "target": recognize.compute_global_AP("t", ignore_null=True),
+        }
+
+        print("\nGlobal Validation Results (for comparison):")
+        for task in ["verb", "instrument", "target", "triplet"]:
+            print(f"{task.capitalize()} Results:")
+            print(f"Global mAP: {global_results[task]['mAP']:.4f}")
 
 
 def main():
@@ -175,6 +213,7 @@ def main():
     DEVICE = torch.device("cuda:1")
     set_seeds()
     configs = load_configs(CONFIGS_PATH)
+    CROSS_VAL_FOLD = 2
 
     val_dataset = MultiTaskVideoDataset(
         clips_dir=CLIPS_DIR,
@@ -186,22 +225,18 @@ def main():
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
         min_occurrences=configs["min_occurrences"],
+        cross_val_fold=CROSS_VAL_FOLD,
     )
 
     val_loader = DataLoader(
         val_dataset, batch_size=configs["batch_size"], shuffle=False
     )
-    # Define your model configuration
-    num_classes = {
-        "verb": 10,
-        "instrument": 6,
-        "target": 15,
-        "triplet": 69,
-    }
+
     # Initialize validator
     validator = ModelValidator(
         val_loader=val_loader,
-        num_classes=num_classes,
+        val_dataset=val_dataset,
+        num_classes=val_dataset.num_classes,
         device=DEVICE,
         model_path=MODEL_PATH,
         triplet_to_ivt=val_dataset.triplet_to_ivt,

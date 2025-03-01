@@ -19,6 +19,63 @@ class Disentangle(object):
 
     def __init__(self):
         self.bank = self.map_file()
+        self.cross_val_splits = {
+            1: [
+                79,
+                2,
+                51,
+                6,
+                25,
+                14,
+                66,
+                23,
+                50,
+            ],
+            2: [
+                80,
+                32,
+                5,
+                15,
+                40,
+                47,
+                26,
+                48,
+                70,
+            ],
+            3: [
+                31,
+                57,
+                36,
+                18,
+                52,
+                68,
+                10,
+                8,
+                73,
+            ],
+            4: [
+                42,
+                29,
+                60,
+                27,
+                65,
+                75,
+                22,
+                49,
+                12,
+            ],
+            5: [
+                78,
+                43,
+                62,
+                35,
+                74,
+                1,
+                56,
+                4,
+                13,
+            ],
+        }
 
     def decompose(self, inputs, component):
         """Extract the component labels from the triplets.

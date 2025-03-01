@@ -1,11 +1,12 @@
 random_seed: 42
 min_occurrences: 100
-clip_length: 15
+clip_length: 16
 batch_size: 2
-train_ratio: 0.80
-frame_width: 448
-frame_height: 256 
+frame_width: 480
+frame_height: 270 
 num_epochs: 15
+val_split: 2
+train_ratio: 0.80
 learning_rate: 0.001
 weight_decay: 0.001
 cross_attention_dim: 128
@@ -15,3 +16,4 @@ temperature: 2.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 
 guidance_scale: 0.9
+fpn_out_channels: 256

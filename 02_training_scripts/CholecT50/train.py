@@ -32,6 +32,7 @@ def main():
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
         min_occurrences=configs["min_occurrences"],
+        cross_val_fold=configs["val_split"],
     )
     val_dataset = MultiTaskVideoDataset(
         clips_dir=CLIPS_DIR,
@@ -43,6 +44,7 @@ def main():
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
         min_occurrences=configs["min_occurrences"],
+        cross_val_fold=configs["val_split"],
     )
     train_loader = DataLoader(
         train_dataset, batch_size=configs["batch_size"], shuffle=True
@@ -57,18 +59,12 @@ def main():
     print_and_get_mappings(val_dataset, logger)
     logger.info("-" * 50)
 
-    print()
     trainer = MultiTaskSelfDistillationTrainer(
         num_epochs=configs["num_epochs"],
         train_loader=train_loader,
         val_loader=val_loader,
         label_mappings=mappings,
-        num_classes={
-            "verb": train_dataset.num_classes["verb"],
-            "instrument": train_dataset.num_classes["instrument"],
-            "target": train_dataset.num_classes["target"],
-            "triplet": train_dataset.num_classes["triplet"],
-        },
+        num_classes=train_dataset.num_classes,
         triplet_to_ivt=train_dataset.triplet_to_ivt,
         warmup_epochs=configs["warmup_epochs"],
         learning_rate=configs["learning_rate"],

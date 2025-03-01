@@ -33,18 +33,14 @@ def setup_logging(experiment_name: str) -> logging.Logger:
 def set_seeds(seed_value: int = 42) -> None:
     # Python's random module
     random.seed(seed_value)
-
     # Numpy
     np.random.seed(seed_value)
-
     # PyTorch
     torch.manual_seed(seed_value)
     torch.cuda.manual_seed_all(seed_value)
-
     # Set CUDA deterministic settings
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
     # Set Python hash seed
     os.environ["PYTHONHASHSEED"] = str(seed_value)
 
@@ -82,3 +78,12 @@ def print_and_get_mappings(dataset, logger: logging.Logger) -> Dict:
         all_mappings[category] = mappings[category]
 
     return all_mappings
+
+
+def resolve_nan(class_aps):
+    equiv_nan = ["-0", "-0.", "-0.0", "-.0"]
+    class_aps = list(map(str, class_aps))
+    class_aps = [np.nan if x in equiv_nan else x for x in class_aps]
+    class_aps = np.array(list(map(float, class_aps)))
+    return class_aps
+

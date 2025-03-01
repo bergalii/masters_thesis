@@ -4,68 +4,18 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 import torch.nn as nn
 import logging
-from torchvision.models.video.swin_transformer import (
-    swin3d_s,
-    Swin3D_S_Weights,
-    swin3d_t,
-    Swin3D_T_Weights,
-)
+from torchvision.models.video.swin_transformer import swin3d_s, Swin3D_S_Weights
 from sklearn.metrics import (
     average_precision_score,
     f1_score,
     precision_score,
     recall_score,
 )
-from modules import CustomSwin3D
+from recognition import Recognition
 import numpy as np
-
-
-class AttentionModule(nn.Module):
-    def __init__(self, feature_dims, num_layers=2, num_heads=4, common_dim=256):
-        super().__init__()
-        self.common_dim = common_dim
-        self.component_embeddings = nn.ModuleDict(
-            {k: nn.Linear(v, common_dim) for k, v in feature_dims.items()}
-        )
-
-        encoder_layer = nn.TransformerEncoderLayer(
-            common_dim, num_heads, dim_feedforward=4 * common_dim, batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
-
-    def forward(self, verb_feat, inst_feat, target_feat):
-        # Project features to common space
-        verb_emb = self.component_embeddings["verb"](verb_feat).unsqueeze(1)
-        inst_emb = self.component_embeddings["instrument"](inst_feat).unsqueeze(1)
-        target_emb = self.component_embeddings["target"](target_feat).unsqueeze(1)
-
-        # Concatenate as sequence tokens
-        tokens = torch.cat([verb_emb, inst_emb, target_emb], dim=1)
-
-        # Process through transformer
-        transformed = self.transformer(tokens)
-
-        # Flatten the sequence dimension
-        batch_size = transformed.size(0)
-        return transformed.reshape(batch_size, -1)
-
-
-class MultiTaskHead(nn.Module):
-    """Classification head for each task (verb, instrument, target)"""
-
-    def __init__(self, in_features: int, num_classes: int):
-        super().__init__()
-        self.head = nn.Sequential(
-            nn.LayerNorm(in_features),
-            nn.Dropout(p=0.5),
-            nn.Linear(in_features, 512),
-            nn.GELU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(512, num_classes),
-        )
-
-    def forward(self, x):
-        return self.head(x)
+from utils import resolve_nan
+import copy
+from modules import AttentionModule, MultiTaskHead
 
 
 class MultiTaskSelfDistillationTrainer:
@@ -98,39 +48,54 @@ class MultiTaskSelfDistillationTrainer:
         self.weight_decay = weight_decay
         self.hidden_layer_dim = hidden_layer_dim
         self.guidance_scale = guidance_scale
+        self.task_weights = {
+            "verb": 0.5,
+            "instrument": 0.5,
+            "target": 0.5,
+            "triplet": 1.0,
+        }
 
         self.device = device
         self.logger = logger
         self.dir_name = dir_name
 
+        self._initialize_guidance_matrices(triplet_to_ivt)
+
+        # Mapping to go from triplet id to individual task ids
         self.triplet_to_ivt = torch.tensor(
             [triplet_to_ivt[idx] for idx in range(len(triplet_to_ivt))],
             device=device,
         )
-        self.MI = torch.zeros(
-            (self.num_classes["instrument"], self.num_classes["triplet"])
-        ).to(device)
-        self.MV = torch.zeros(
-            (self.num_classes["verb"], self.num_classes["triplet"])
-        ).to(device)
-        self.MT = torch.zeros(
-            (self.num_classes["target"], self.num_classes["triplet"])
-        ).to(device)
-        for t, (inst, verb, target) in triplet_to_ivt.items():
-            self.MI[inst, t] = 1
-            self.MV[verb, t] = 1
-            self.MT[target, t] = 1
 
         self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
         self.attention_module = AttentionModule(self.feature_dims).to(self.device)
         self._configure_models()
 
+    def _initialize_guidance_matrices(self, triplet_to_ivt):
+        """Initialize the matrices for guidance"""
+        self.MI = torch.zeros(
+            (self.num_classes["instrument"], self.num_classes["triplet"])
+        ).to(self.device)
+        self.MV = torch.zeros(
+            (self.num_classes["verb"], self.num_classes["triplet"])
+        ).to(self.device)
+        self.MT = torch.zeros(
+            (self.num_classes["target"], self.num_classes["triplet"])
+        ).to(self.device)
+
+        for t, (inst, verb, target) in triplet_to_ivt.items():
+            self.MI[inst, t] = 1
+            self.MV[verb, t] = 1
+            self.MT[target, t] = 1
+
     def _configure_models(self):
+        """Initialize and configure teacher and student models"""
         # Initialize the teacher model
-        # self.teacher_model = swin3d_s(weights=Swin3D_S_Weights.DEFAULT).to(self.device)
-        # in_features = self.teacher_model.num_features
-        self.teacher_model = CustomSwin3D().to(self.device)
-        in_features = self.teacher_model.out_channels
+        self.teacher_model = swin3d_s(weights=Swin3D_S_Weights.DEFAULT).to(self.device)
+        # We need to remove the original classification head
+        self.teacher_model.head = nn.Identity()
+        in_features = self.teacher_model.num_features
+
         # Teacher heads
         self.teacher_model.verb_head = MultiTaskHead(
             in_features, self.num_classes["verb"]
@@ -147,30 +112,12 @@ class MultiTaskSelfDistillationTrainer:
         total_input_size = (
             in_features + sum(self.feature_dims.values()) + 3 * common_dim
         )
-        self.teacher_model.triplet_head = nn.Sequential(
-            nn.LayerNorm(total_input_size),
-            nn.Dropout(p=0.5),
-            nn.Linear(total_input_size, 512),
-            nn.GELU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(512, self.num_classes["triplet"]),
+        self.teacher_model.triplet_head = MultiTaskHead(
+            total_input_size, self.num_classes["triplet"]
         ).to(self.device)
-        # We need to remove the original classification head
-        # self.teacher_model.head = nn.Identity()
 
-        # Initialize student model (uses only the triplet head)
-        self.student_model = swin3d_t(weights=Swin3D_T_Weights.DEFAULT).to(self.device)
-        in_features_student = self.student_model.num_features
-        # Student triplet head (uses only the backbone features)
-        self.student_model.triplet_head = nn.Sequential(
-            nn.LayerNorm(in_features_student),
-            nn.Dropout(p=0.5),
-            nn.Linear(in_features_student, 512),
-            nn.GELU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(512, self.num_classes["triplet"]),
-        ).to(self.device)
-        self.student_model.head = nn.Identity()
+        # Deep copy the teacher model to create identical student model
+        self.student_model = copy.deepcopy(self.teacher_model)
 
         # Create optimizers and schedulers
         self.teacher_optimizer, self.teacher_scheduler = (
@@ -198,44 +145,84 @@ class MultiTaskSelfDistillationTrainer:
             nesterov=True,
         )
 
-        scheduler = ReduceLROnPlateau(optimizer, mode="max", factor=0.1, patience=7)
+        scheduler = ReduceLROnPlateau(optimizer, mode="max", factor=0.1, patience=5)
         return optimizer, scheduler
 
-    def _forward_pass(self, model, inputs, mode):
+    def _forward_pass(self, model, inputs):
         """Perform forward pass through the model based on the model type [teacher, student]"""
         features = model(inputs)
-        if mode == "teacher":
-            # Get individual component predictions
-            verb_logits = model.verb_head(features)
-            instrument_logits = model.instrument_head(features)
-            target_logits = model.target_head(features)
-            # Apply cross-attention fusion
-            attention_output = self.attention_module(
-                verb_logits, instrument_logits, target_logits
-            )
-            # Combine all features for triplet prediction
-            combined_features = torch.cat(
-                [
-                    features,  # original features from backbone
-                    verb_logits,  # verb predictions
-                    instrument_logits,  # instrument predictions
-                    target_logits,  # target predictions
-                    attention_output,  # features from the attention module
-                ],
-                dim=1,
-            )
-            triplet_logits = model.triplet_head(combined_features)
-            return {
-                "verb": verb_logits,
-                "instrument": instrument_logits,
-                "target": target_logits,
-                "triplet": triplet_logits,
-            }
+        # Get individual component predictions
+        verb_logits = model.verb_head(features)
+        instrument_logits = model.instrument_head(features)
+        target_logits = model.target_head(features)
 
-        elif mode == "student":
-            # Student's forward pass (only triplet)
-            triplet_logits = model.triplet_head(features)
-            return {"triplet": triplet_logits}
+        # Apply attention module
+        attention_output = self.attention_module(
+            verb_logits, instrument_logits, target_logits
+        )
+        # Combine all features for triplet prediction
+        combined_features = torch.cat(
+            [
+                features,  # original features from backbone
+                verb_logits,  # calibrated verb predictions
+                instrument_logits,  # calibrated instrument predictions
+                target_logits,  # calibrated target predictions
+                attention_output,  # attention-fused features
+            ],
+            dim=1,
+        )
+
+        triplet_logits = model.triplet_head(combined_features)
+
+        return {
+            "verb": verb_logits,
+            "instrument": instrument_logits,
+            "target": target_logits,
+            "triplet": triplet_logits,
+        }
+
+    def _calculate_consistency_loss(self, triplet_logits, component_logits, alpha=0.3):
+        """
+        Enforce consistency between triplet predictions and component predictions
+
+        Args:
+            triplet_logits: Logits from the triplet head
+            component_logits: Dictionary of logits from component heads
+            alpha: Weighting factor for the consistency loss
+        """
+        # Get component probabilities
+        inst_probs = torch.sigmoid(component_logits["instrument"])
+        verb_probs = torch.sigmoid(component_logits["verb"])
+        target_probs = torch.sigmoid(component_logits["target"])
+
+        # Get triplet probabilities
+        triplet_probs = torch.sigmoid(triplet_logits)
+
+        # Calculate expected triplet probabilities from individual components
+        expected_triplets = torch.zeros_like(triplet_probs)
+        for t_idx in range(self.num_classes["triplet"]):
+            i_idx, v_idx, tg_idx = self.triplet_to_ivt[t_idx]
+
+            # Use geometric mean to combine probabilities to avoid extremely small values
+            combined_prob = torch.pow(
+                torch.clamp(
+                    inst_probs[:, i_idx]
+                    * verb_probs[:, v_idx]
+                    * target_probs[:, tg_idx],
+                    min=1e-6,
+                ),
+                1 / 3,
+            )
+            expected_triplets[:, t_idx] = combined_prob
+
+        # Calculate binary cross entropy between predicted and expected
+        consistency_loss = F.binary_cross_entropy(
+            triplet_probs,
+            expected_triplets.detach(),  # Detach to avoid backprop through components
+            reduction="mean",
+        )
+
+        return alpha * consistency_loss
 
     def _compute_loss(self, outputs, labels, inputs, mode):
         """Compute the combined loss for all tasks
@@ -248,41 +235,71 @@ class MultiTaskSelfDistillationTrainer:
         """
         total_loss = 0
         losses = {}
-        task_weights = {"verb": 0.5, "instrument": 0.5, "target": 0.5, "triplet": 1.0}
+
+        # Get teacher's predictions for student mode
+        if mode == "student":
+            with torch.no_grad():
+                teacher_outputs = self._forward_pass(self.teacher_model, inputs)
 
         for task in outputs:
-            # Standard BCE Loss
-            loss = F.binary_cross_entropy_with_logits(outputs[task], labels[task])
-            # Combine it with distillation loss for the student model
+            # Standard BCE Loss with ground truth labels
+            gt_loss = F.binary_cross_entropy_with_logits(outputs[task], labels[task])
+
+            # Combine with distillation loss for the student model
             if mode == "student":
-                # Get teacher's predictions
-                self.teacher_model.eval()
-                with torch.no_grad():
-                    teacher_outputs = self._forward_pass(
-                        self.teacher_model, inputs, "teacher"
-                    )
-                    teacher_logits = teacher_outputs["triplet"]
-                    # Apply temperature scaling
-                    soft_targets = torch.sigmoid(teacher_logits / self.temperature)
+                # Apply temperature scaling to teacher and student outputs
+                teacher_logits = teacher_outputs[task] / self.temperature
+                student_logits = outputs[task] / self.temperature
+
+                # Get soft targets from teacher
+                soft_targets = torch.sigmoid(teacher_logits)
 
                 # Calculate distillation loss
-                student_logits = outputs[task] / self.temperature
                 distillation_loss = F.binary_cross_entropy_with_logits(
                     student_logits, soft_targets
                 ) * (
                     self.temperature**2
                 )  # Scale the loss back
 
-                #  Gradually include the distillation loss
-                total_loss = (1 - self.alpha) * loss + self.alpha * distillation_loss
-                losses[task] = total_loss.item()
+                # Gradually balance between ground truth and teacher guidance
+                task_loss = (1 - self.alpha) * gt_loss + self.alpha * distillation_loss
+            else:
+                # For teacher model, just use ground truth loss
+                task_loss = gt_loss
 
-                return total_loss, losses
+            # Apply task-specific weight
+            total_loss += self.task_weights[task] * task_loss
+            losses[task] = task_loss.item()
 
-            total_loss += task_weights[task] * loss
-            losses[task] = loss.item()
+        # consistency_loss = self._calculate_consistency_loss(
+        #     outputs["triplet"],
+        #     {k: outputs[k] for k in ["verb", "instrument", "target"]},
+        # )
+        # total_loss += consistency_loss
 
         return total_loss, losses
+
+    def _update_task_weights(self, validation_metrics):
+        """Update task weights based on validation performance, keeping triplet weight fixed at 1.0"""
+        # Get a list of tasks excluding 'triplet'
+        component_tasks = [task for task in self.task_weights if task != "triplet"]
+
+        # Calculate total inverse performance for component tasks only
+        total_inverse = sum(
+            1.0 / (validation_metrics[task] + 0.1) for task in component_tasks
+        )
+
+        # Update weights for component tasks only
+        for task in component_tasks:
+            # Normalize weights relative to each other, while keeping their average at 0.5
+            self.task_weights[task] = (
+                (1.0 / (validation_metrics[task] + 0.1)) / total_inverse
+            ) * 0.5
+
+        # Keep triplet weight fixed at 1.0
+        self.task_weights["triplet"] = 1.0
+
+        self.logger.info(f"Task weights: {self.task_weights}")
 
     def _train_model(self, model, optimizer, lr_scheduler, mode):
         """Train either teacher or student model"""
@@ -297,16 +314,12 @@ class MultiTaskSelfDistillationTrainer:
             for inputs, labels in self.train_loader:
                 inputs = inputs.to(self.device)
                 # Only the triplet labels for the student model
-                batch_labels = (
-                    {"triplet": labels["triplet"].to(self.device)}
-                    if mode == "student"
-                    else {
-                        task: labels[task].to(self.device)
-                        for task in ["verb", "instrument", "target", "triplet"]
-                    }
-                )
+                batch_labels = {
+                    task: labels[task].to(self.device)
+                    for task in ["verb", "instrument", "target", "triplet"]
+                }
 
-                outputs = self._forward_pass(model, inputs, mode)
+                outputs = self._forward_pass(model, inputs)
 
                 total_loss, task_losses = self._compute_loss(
                     outputs, batch_labels, inputs, mode
@@ -321,12 +334,15 @@ class MultiTaskSelfDistillationTrainer:
                 for task, loss in task_losses.items():
                     epoch_losses[task] = epoch_losses.get(task, 0) + loss
 
-            # Validation
+            ## Validation ##
             self.logger.info(f"Validation Results - Epoch {epoch+1}/{self.num_epochs}:")
             val_metrics = self._validate_model(model, mode)
+
             triplet_map = val_metrics.get("triplet")
             # Update learning rate scheduler
             lr_scheduler.step(triplet_map)
+            # Update dynamic weights
+            self._update_task_weights(val_metrics)
 
             # Log metrics
             self.logger.info("Training Losses:")
@@ -341,9 +357,7 @@ class MultiTaskSelfDistillationTrainer:
             # Save best models for each task
             if triplet_map > best_map:
                 best_map = triplet_map
-                torch.save(
-                    model.state_dict(), f"{self.dir_name}/best_model_triplet_{mode}.pth"
-                )
+                torch.save(model.state_dict(), f"{self.dir_name}/best_model_{mode}.pth")
                 self.logger.info(f"New best triplet mAP: {triplet_map:.4f}")
                 self.logger.info("-" * 50)
 
@@ -351,144 +365,87 @@ class MultiTaskSelfDistillationTrainer:
         """Validate model and compute metrics for all tasks"""
 
         model.eval()
-        all_predictions = {}
-        all_labels = {}
+
+        recognize = Recognition(num_class=self.num_classes["triplet"])
+        # Reset for the current validation run
+        recognize.reset()
 
         with torch.no_grad():
             for inputs, batch_labels in self.val_loader:
                 inputs = inputs.to(self.device)
-                model_outputs = self._forward_pass(model, inputs, mode)
+                model_outputs = self._forward_pass(model, inputs)
 
-                # Convert all outputs to probabilities at once
+                # Convert all outputs to probabilities
                 task_probabilities = {
                     task: torch.sigmoid(outputs)
                     for task, outputs in model_outputs.items()
                 }
 
-                # Apply guidance if it is the teacher model
-                if mode == "teacher":
-                    # Get guidance from individual tasks
-                    guidance_inst = torch.matmul(
-                        task_probabilities["instrument"], self.MI
-                    )
-                    guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
-                    guidance_target = torch.matmul(
-                        task_probabilities["target"], self.MT
-                    )
+                # Get guidance from individual tasks
+                guidance_inst = torch.matmul(task_probabilities["instrument"], self.MI)
+                guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
+                guidance_target = torch.matmul(task_probabilities["target"], self.MT)
 
-                    # Combine guidance signals
-                    guidance = guidance_inst * guidance_verb * guidance_target
+                # Combine guidance outputs
+                guidance = guidance_inst * guidance_verb * guidance_target
 
-                    # Apply guidance with a scale factor
-                    guided_triplet_probs = (
-                        1 - self.guidance_scale
-                    ) * task_probabilities["triplet"] + self.guidance_scale * (
-                        guidance * task_probabilities["triplet"]
-                    )
+                # Apply guidance with a scale factor
+                guided_triplet_probs = (1 - self.guidance_scale) * task_probabilities[
+                    "triplet"
+                ] + self.guidance_scale * (guidance * task_probabilities["triplet"])
 
-                    # Update the triplet predictions with guided probabilities
-                    task_probabilities["triplet"] = guided_triplet_probs
+                # Update the triplet predictions with guided probabilities
+                task_probabilities["triplet"] = guided_triplet_probs
 
-                # Store probabilities and labels
-                for task in task_probabilities:
-                    if task not in all_predictions:
-                        all_predictions[task] = []
-                        all_labels[task] = []
-                    all_predictions[task].append(task_probabilities[task].cpu())
-                    all_labels[task].append(batch_labels[task].cpu())
+                # Update with triplet predictions and labels
+                predictions = guided_triplet_probs.cpu().numpy()
+                labels = batch_labels["triplet"].cpu().numpy()
+
+                # Update the recognizer with the current batch
+                recognize.update(labels, predictions)
 
         task_metrics = {}
-        for task in all_predictions:
-            predictions = torch.cat(all_predictions[task], dim=0).numpy()
-            labels = torch.cat(all_labels[task], dim=0).numpy()
+        component_map = {
+            "triplet": "ivt",
+            "instrument": "i",
+            "verb": "v",
+            "target": "t",
+        }
 
-            ####################
-            # Calculate AP per class without averaging
-            class_aps = average_precision_score(labels, predictions, average=None)
-            class_aps = self._resolve_nan(class_aps)
+        for task, component in component_map.items():
+            # Calculate metrics for this component
+            results = recognize.compute_AP(component=component, ignore_null=True)
 
-            # Calculate mean AP excluding NaN values
-            mean_ap = np.nanmean(class_aps)
+            # Store mean AP and class APs
+            mean_ap = results["mAP"]
+            class_aps = results["AP"]
 
-            task_metrics[task] = {"mAP": mean_ap}
+            # Initialize task metrics
+            task_metrics[task] = {"mAP": mean_ap, "per_class": {}}
 
-            # Log metrics
+            # Log the results
             self.logger.info(f"{task.upper()} METRICS:")
             self.logger.info(f"  Overall mAP: {mean_ap:.4f}")
 
-        return {task: task_metrics[task]["mAP"] for task in task_metrics}
-        ####################
+            # Store and log per-class metrics
+            for i in range(len(class_aps)):
 
-        # task_metrics[task] = {
-        #     "overall": {
-        #         "mAP": average_precision_score(
-        #             true_labels, predictions, average="micro"
-        #         ),
-        #         "macro_AP": average_precision_score(
-        #             true_labels, predictions, average="macro"
-        #         ),
-        #         "weighted_AP": average_precision_score(
-        #             true_labels, predictions, average="weighted"
-        #         ),
-        #     },
-        #     "per_class": {},
-        # }
+                # Get the class name based on the component
+                if task == "triplet":
+                    original_id = self.val_loader.dataset.index_to_triplet[i]
+                    label_name = self.label_mappings[task].get(
+                        original_id, f"Class_{original_id}"
+                    )
+                else:
+                    label_name = self.label_mappings[task].get(i, f"Class_{i}")
 
-        # task_metrics[task]["per_class"] = {}
-        # class_aps = average_precision_score(true_labels, predictions, average=None)
+                # Store AP for this class
+                task_metrics[task]["per_class"][label_name] = {"AP": class_aps[i]}
+                # Log per-class AP
+                self.logger.info(f"  {label_name}:")
+                self.logger.info(f"    AP: {class_aps[i]:.4f}")
 
-        #     for i in range(len(class_aps)):
-        #         class_preds = predictions[:, i]
-        #         class_labels = true_labels[:, i]
-        #         # Use the index_to_triplet mapping to get the original triplet ID
-        #         if task == "triplet":
-        #             original_id = self.val_loader.dataset.index_to_triplet[i]
-        #             label_name = self.label_mappings[task].get(
-        #                 original_id, f"Class_{original_id}"
-        #             )
-        #         else:
-        #             label_name = self.label_mappings[task].get(i, f"Class_{i}")
-
-        #         thresholds = np.arange(0.3, 0.7, 0.1)
-        #         f1_scores = [
-        #             f1_score(class_labels, class_preds > t) for t in thresholds
-        #         ]
-        #         optimal_threshold = thresholds[np.argmax(f1_scores)]
-        #         binary_preds = (class_preds > optimal_threshold).astype(int)
-        #         task_metrics[task]["per_class"][label_name] = {
-        #             "AP": class_aps[i],
-        #             "precision": precision_score(class_labels, binary_preds),
-        #             "recall": recall_score(class_labels, binary_preds),
-        #             "f1": f1_score(class_labels, binary_preds),
-        #             "optimal_threshold": optimal_threshold,
-        #         }
-
-        #     # Log metrics
-        #     self.logger.info(f"{task.upper()} METRICS:")
-        #     self.logger.info(
-        #         f"  Overall mAP: {task_metrics[task]['overall']['mAP']:.4f}"
-        #     )
-        #     self.logger.info(
-        #         f"  Macro AP: {task_metrics[task]['overall']['macro_AP']:.4f}"
-        #     )
-        #     self.logger.info(
-        #         f"  Weighted AP: {task_metrics[task]['overall']['weighted_AP']:.4f}"
-        #     )
-
-        #     if "per_class" in task_metrics[task]:
-        #         for class_name, class_metrics in task_metrics[task][
-        #             "per_class"
-        #         ].items():
-        #             self.logger.info(f" {class_name}:")
-        #             self.logger.info(f"  AP: {class_metrics['AP']:.4f}")
-        #             self.logger.info(f"  F1: {class_metrics['f1']:.4f}")
-        #             self.logger.info(f"  Precision: {class_metrics['precision']:.4f}")
-        #             self.logger.info(f"  Recall: {class_metrics['recall']:.4f}")
-        #             self.logger.info(
-        #                 f"  Optimal threshold: {class_metrics['optimal_threshold']:.2f}"
-        #             )
-
-        # return {task: task_metrics[task]["overall"]["mAP"] for task in task_metrics}
+        return {task: metrics["mAP"] for task, metrics in task_metrics.items()}
 
     def train(self):
         """Execute full training pipeline with self-distillation"""
@@ -507,6 +464,16 @@ class MultiTaskSelfDistillationTrainer:
             "teacher",
         )
 
+        # After teacher training completes, load the best teacher model for distillation
+        best_teacher_path = f"{self.dir_name}/best_model_teacher.pth"
+        self.logger.info(
+            f"Loading best teacher model from {best_teacher_path} for distillation..."
+        )
+        # Load the best teacher model weights
+        teacher_state_dict = torch.load(best_teacher_path)
+        self.teacher_model.load_state_dict(teacher_state_dict)
+        self.teacher_model.eval()
+
         # Train the student model
         self.logger.info("Training student model...")
         trainable_params_student = sum(
@@ -519,10 +486,3 @@ class MultiTaskSelfDistillationTrainer:
             self.student_scheduler,
             "student",
         )
-
-    def _resolve_nan(self, class_aps):
-        equiv_nan = ["-0", "-0.", "-0.0", "-.0"]
-        class_aps = list(map(str, class_aps))
-        class_aps = [np.nan if x in equiv_nan else x for x in class_aps]
-        class_aps = np.array(list(map(float, class_aps)))
-        return class_aps

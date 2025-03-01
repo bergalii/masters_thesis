@@ -31,7 +31,7 @@ class MultiTaskHead(nn.Module):
         return self.head(x)
 
 
-class AttentionModule(nn.Module):
+class AttentionModule(nn.Module): # 4th version
     def __init__(self, feature_dims, num_layers=2, num_heads=4, common_dim=256):
         super().__init__()
         self.common_dim = common_dim
@@ -209,21 +209,21 @@ class FeaturePyramidNetwork(nn.Module):
         return out
 
 
-# class LastLevelMaxPool(ExtraFPNBlock):
-#     """
-#     Applies a max_pool3d  on top of the last feature map
-#     """
+class LastLevelMaxPool(ExtraFPNBlock):
+    """
+    Applies a max_pool3d  on top of the last feature map
+    """
 
-#     def forward(
-#         self,
-#         x: List[Tensor],
-#         y: List[Tensor],
-#         names: List[str],
-#     ) -> Tuple[List[Tensor], List[str]]:
-#         names.append("pool")
-#         # Use max pooling to simulate stride 2 subsampling
-#         x.append(F.max_pool3d(x[-1], kernel_size=1, stride=2, padding=0))
-#         return x, names
+    def forward(
+        self,
+        x: List[Tensor],
+        y: List[Tensor],
+        names: List[str],
+    ) -> Tuple[List[Tensor], List[str]]:
+        names.append("pool")
+        # Use max pooling to simulate stride 2 subsampling
+        x.append(F.max_pool3d(x[-1], kernel_size=1, stride=2, padding=0))
+        return x, names
 
 
 class IntermediateLayerGetter(nn.ModuleDict):
@@ -269,8 +269,8 @@ class BackboneWithFPN(nn.Module):
         norm_layer: Optional[Callable[..., nn.Module]] = None,
     ) -> None:
         super().__init__()
-        # if extra_blocks is None:
-        #     extra_blocks = LastLevelMaxPool()
+        if extra_blocks is None:
+            extra_blocks = LastLevelMaxPool()
 
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
         self.fpn = FeaturePyramidNetwork(
@@ -292,8 +292,7 @@ class CustomSwin3D(nn.Module):
     def __init__(self):
         super().__init__()
         self.backbone = self._create_backbone()
-
-        # Update in_channels_list to match output channels of selected layers
+        self.out_channels = 256
         in_channels_list = [96, 192, 384, 768]
 
         backbone_module = nn.Sequential(
@@ -321,39 +320,12 @@ class CustomSwin3D(nn.Module):
             backbone_module,
             return_layers,
             in_channels_list,
-            out_channels=256,
+            out_channels=self.out_channels,
             extra_blocks=None,
         )
-        self.out_channels = 256
-
-        # Add weights for each FPN level
-        self.level_weights = nn.Parameter(torch.ones(4))  # 4 FPN levels
-        self.norm = nn.LayerNorm(256)
-        self.avgpool = nn.AdaptiveAvgPool3d(1)
 
     def forward(self, x):
-        # Get FPN output
-        fpn_output = self.model(x)
-
-        # Normalize level weights
-        weights = F.softmax(self.level_weights, dim=0)
-
-        # Process each level
-        pooled_features = []
-        for i, (_, feat_map) in enumerate(fpn_output.items()):
-            # Apply normalization and pooling to each level
-            B, C, T, H, W = feat_map.shape
-            feat_map = feat_map.permute(0, 2, 3, 4, 1)
-            feat_map = self.norm(feat_map)
-            feat_map = feat_map.permute(0, 4, 1, 2, 3)
-
-            pooled = self.avgpool(feat_map)
-            pooled = pooled.squeeze(-1).squeeze(-1).squeeze(-1)  # [B, C]
-            pooled_features.append(pooled * weights[i])
-
-        # Combine features from all levels
-        combined_features = sum(pooled_features)
-        return combined_features
+        return self.model(x)
 
     def _create_backbone(self):
         backbone = swin3d_s(weights=Swin3D_S_Weights.DEFAULT)
