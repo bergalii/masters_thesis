@@ -5,15 +5,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import logging
 from torchvision.models.video.swin_transformer import swin3d_s, Swin3D_S_Weights
-from sklearn.metrics import (
-    average_precision_score,
-    f1_score,
-    precision_score,
-    recall_score,
-)
 from recognition import Recognition
-import numpy as np
-from utils import resolve_nan
 import copy
 from modules import AttentionModule, MultiTaskHead
 
@@ -33,6 +25,7 @@ class MultiTaskSelfDistillationTrainer:
         learning_rate: float,
         weight_decay: float,
         hidden_layer_dim: int,
+        gradient_clipping: float,
         warmup_epochs: int = 5,
         temperature: float = 2.0,
         guidance_scale: float = 0.8,
@@ -47,6 +40,7 @@ class MultiTaskSelfDistillationTrainer:
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.hidden_layer_dim = hidden_layer_dim
+        self.gradient_clipping = gradient_clipping
         self.guidance_scale = guidance_scale
         self.task_weights = {
             "verb": 0.5,
@@ -109,9 +103,7 @@ class MultiTaskSelfDistillationTrainer:
 
         # Teacher triplet head combines the ivt heads output features
         common_dim = self.attention_module.common_dim
-        total_input_size = (
-            in_features + sum(self.feature_dims.values()) + 3 * common_dim
-        )
+        total_input_size = in_features + 3 * common_dim
         self.teacher_model.triplet_head = MultiTaskHead(
             total_input_size, self.num_classes["triplet"]
         ).to(self.device)
@@ -127,25 +119,66 @@ class MultiTaskSelfDistillationTrainer:
             self._create_optimizer_and_scheduler(self.student_model)
         )
 
+    # def _create_optimizer_and_scheduler(self, model):
+    #     """Create optimizer and scheduler with parameter groups"""
+
+    #     decay_params, no_decay_params = [], []
+    #     for name, param in model.named_parameters():
+    #         if param.requires_grad:
+    #             (no_decay_params if "bias" in name else decay_params).append(param)
+
+    #     optimizer = SGD(
+    #         [
+    #             {"params": decay_params, "weight_decay": self.weight_decay},
+    #             {"params": no_decay_params, "weight_decay": 0.0},
+    #         ],
+    #         lr=self.learning_rate,
+    #         momentum=0.9,
+    #         nesterov=True,
+    #     )
+
+    #     scheduler = ReduceLROnPlateau(optimizer, mode="max", factor=0.1, patience=5)
+    #     return optimizer, scheduler
+
     def _create_optimizer_and_scheduler(self, model):
         """Create optimizer and scheduler with parameter groups"""
 
-        decay_params, no_decay_params = [], []
+        # Separate backbone and heads for different learning rates
+        backbone_params = []
+        head_params = []
         for name, param in model.named_parameters():
             if param.requires_grad:
-                (no_decay_params if "bias" in name else decay_params).append(param)
+                if "head" in name:
+                    head_params.append(param)
+                else:
+                    backbone_params.append(param)
 
-        optimizer = SGD(
+        # Add attention module parameters to head_params
+        for param in self.attention_module.parameters():
+            if param.requires_grad:
+                head_params.append(param)
+
+        # Use AdamW instead of SGD
+        optimizer = torch.optim.AdamW(
             [
-                {"params": decay_params, "weight_decay": self.weight_decay},
-                {"params": no_decay_params, "weight_decay": 0.0},
-            ],
-            lr=self.learning_rate,
-            momentum=0.9,
-            nesterov=True,
+                {
+                    "params": backbone_params,
+                    "lr": self.learning_rate / 10,
+                    "weight_decay": self.weight_decay,
+                },
+                {
+                    "params": head_params,
+                    "lr": self.learning_rate,
+                    "weight_decay": self.weight_decay,
+                },
+            ]
         )
 
-        scheduler = ReduceLROnPlateau(optimizer, mode="max", factor=0.1, patience=5)
+        # Use cosine annealing with warm restarts
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer, T_0=10, T_mult=1, eta_min=self.learning_rate / 100
+        )
+
         return optimizer, scheduler
 
     def _forward_pass(self, model, inputs):
@@ -160,13 +193,11 @@ class MultiTaskSelfDistillationTrainer:
         attention_output = self.attention_module(
             verb_logits, instrument_logits, target_logits
         )
+
         # Combine all features for triplet prediction
         combined_features = torch.cat(
             [
                 features,  # original features from backbone
-                verb_logits,  # calibrated verb predictions
-                instrument_logits,  # calibrated instrument predictions
-                target_logits,  # calibrated target predictions
                 attention_output,  # attention-fused features
             ],
             dim=1,
@@ -181,7 +212,7 @@ class MultiTaskSelfDistillationTrainer:
             "triplet": triplet_logits,
         }
 
-    def _calculate_consistency_loss(self, triplet_logits, component_logits, alpha=0.3):
+    def _calculate_consistency_loss(self, triplet_logits, component_logits, alpha=0.25):
         """
         Enforce consistency between triplet predictions and component predictions
 
@@ -271,11 +302,11 @@ class MultiTaskSelfDistillationTrainer:
             total_loss += self.task_weights[task] * task_loss
             losses[task] = task_loss.item()
 
-        # consistency_loss = self._calculate_consistency_loss(
-        #     outputs["triplet"],
-        #     {k: outputs[k] for k in ["verb", "instrument", "target"]},
-        # )
-        # total_loss += consistency_loss
+        consistency_loss = self._calculate_consistency_loss(
+            outputs["triplet"],
+            {k: outputs[k] for k in ["verb", "instrument", "target"]},
+        )
+        total_loss += consistency_loss
 
         return total_loss, losses
 
@@ -294,7 +325,7 @@ class MultiTaskSelfDistillationTrainer:
             # Normalize weights relative to each other, while keeping their average at 0.5
             self.task_weights[task] = (
                 (1.0 / (validation_metrics[task] + 0.1)) / total_inverse
-            ) * 0.5
+            ) * 0.75
 
         # Keep triplet weight fixed at 1.0
         self.task_weights["triplet"] = 1.0
@@ -327,7 +358,9 @@ class MultiTaskSelfDistillationTrainer:
 
                 optimizer.zero_grad()
                 total_loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=self.gradient_clipping
+                )
                 optimizer.step()
 
                 # Accumulate losses
@@ -414,7 +447,7 @@ class MultiTaskSelfDistillationTrainer:
 
         for task, component in component_map.items():
             # Calculate metrics for this component
-            results = recognize.compute_AP(component=component, ignore_null=True)
+            results = recognize.compute_AP(component=component)
 
             # Store mean AP and class APs
             mean_ap = results["mAP"]
@@ -452,10 +485,14 @@ class MultiTaskSelfDistillationTrainer:
 
         # Train the teacher model
         self.logger.info("Training teacher model...")
-        trainable_params_teacher = sum(
+        model_params = sum(
             p.numel() for p in self.teacher_model.parameters() if p.requires_grad
         )
-        self.logger.info(f"Trainable parameters: {trainable_params_teacher:,}")
+        attention_params = sum(
+            p.numel() for p in self.attention_module.parameters() if p.requires_grad
+        )
+        total_trainable_params = model_params + attention_params
+        self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
         self.logger.info("-" * 50)
         self._train_model(
             self.teacher_model,

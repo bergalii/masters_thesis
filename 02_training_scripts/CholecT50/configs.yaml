@@ -1,7 +1,7 @@
 random_seed: 42
 min_occurrences: 100
-clip_length: 16
-batch_size: 2
+clip_length: 12
+batch_size: 4
 frame_width: 480
 frame_height: 270 
 num_epochs: 15
@@ -15,5 +15,5 @@ warmup_epochs: 5
 temperature: 2.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 
-guidance_scale: 0.9
+guidance_scale: 1.0
 fpn_out_channels: 256

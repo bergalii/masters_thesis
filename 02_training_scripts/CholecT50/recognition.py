@@ -4,6 +4,7 @@ import warnings
 import sys
 from disentangle import Disentangle
 
+
 class Recognition(Disentangle):
     """
     Class: compute (mean) Average Precision
@@ -104,13 +105,11 @@ class Recognition(Disentangle):
         mean: float
             mean AP performance
         """
-        if component in ["ivt", "it", "iv", "t", "v", "i"]:
-            targets = self.extract(self.targets, component)
-            predicts = self.extract(self.predictions, component)
-        else:
-            raise NotImplementedError(
-                f"Function filtering {component} not supported yet!"
-            )
+
+        targets = self.extract(self.targets, component)
+        predicts = self.extract(self.predictions, component)
+        has_positive = np.sum(targets, axis=0) > 0
+
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 action="ignore",
@@ -120,7 +119,8 @@ class Recognition(Disentangle):
             classwise = self.resolve_nan(classwise)
             if ignore_null and component == "ivt":
                 classwise = classwise[:-6]
-            mean = np.nanmean(classwise)
+
+            mean = np.nanmean(classwise[has_positive])
         return {"AP": classwise, "mAP": mean}
 
     def compute_global_AP(self, component="ivt", ignore_null=False):
@@ -138,21 +138,24 @@ class Recognition(Disentangle):
             mean AP performance
         """
         targets, predicts = self.aggregate_global_records()
-        if component in ["ivt", "it", "iv", "t", "v", "i"]:
-            targets = self.extract(targets, component)
-            predicts = self.extract(predicts, component)
-        else:
-            sys.exit("Function filtering {} not yet supported!".format(component))
+
+        targets = self.extract(targets, component)
+        predicts = self.extract(predicts, component)
+
+        # Find classes that have at least one positive example
+        has_positive = np.sum(targets, axis=0) > 0
+
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 action="ignore",
                 message="[info] triplet classes not represented in this test sample will be reported as nan values.",
             )
+
             classwise = average_precision_score(targets, predicts, average=None)
             classwise = self.resolve_nan(classwise)
-            if ignore_null and component == "ivt":
-                classwise = classwise[:-6]
-            mean = np.nanmean(classwise)
+            # Calculate mean only over classes that have at least one positive example
+            mean = np.nanmean(classwise[has_positive])
+
         return {"AP": classwise, "mAP": mean}
 
     def compute_video_AP(self, component="ivt", ignore_null=False):
@@ -171,25 +174,28 @@ class Recognition(Disentangle):
         """
         global_targets, global_predictions = self.aggregate_global_records_partial()
         video_log = []
+        valid_classes_per_video = []
         with warnings.catch_warnings():
             warnings.filterwarnings(action="ignore", message="")
             warnings.simplefilter("ignore", category=RuntimeWarning)
             for targets, predicts in zip(global_targets, global_predictions):
-                if component in ["ivt", "it", "iv", "t", "v", "i"]:
-                    targets = self.extract(targets, component)
-                    predicts = self.extract(predicts, component)
-                else:
-                    sys.exit(
-                        "Function filtering {} not yet supported!".format(component)
-                    )
+
+                targets = self.extract(targets, component)
+                predicts = self.extract(predicts, component)
+                # Find classes with positive examples for this video
+                has_positive_video = np.sum(targets, axis=0) > 0
+                valid_classes_per_video.append(has_positive_video)
+
                 classwise = average_precision_score(targets, predicts, average=None)
                 classwise = self.resolve_nan(classwise)
                 video_log.append(classwise.reshape([1, -1]))
             video_log = np.concatenate(video_log, axis=0)
+            # Find classes that have at least one positive example in ANY video
+            has_positive_any_video = np.any(np.array(valid_classes_per_video), axis=0)
             videowise = np.nanmean(video_log, axis=0)
             if ignore_null and component == "ivt":
                 videowise = videowise[:-6]
-            mean = np.nanmean(videowise)
+            mean = np.nanmean(videowise[has_positive_any_video])
         return {"AP": videowise, "mAP": mean}
 
     ##%%%%%%%%%%%%%%%%%%% TOP OP #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

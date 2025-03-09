@@ -18,7 +18,7 @@ class ModelValidator:
         device: str,
         model_path: str,
         triplet_to_ivt: dict,
-        guidance_scale: float = 0.8,
+        guidance_scale: float,
     ):
         self.val_loader = val_loader
         self.val_dataset = val_dataset
@@ -69,14 +69,17 @@ class ModelValidator:
         total_input_size = (
             in_features + sum(self.feature_dims.values()) + 3 * common_dim
         )
-        model.triplet_head = nn.Sequential(
-            nn.LayerNorm(total_input_size),
-            nn.Dropout(p=0.5),
-            nn.Linear(total_input_size, 512),
-            nn.GELU(),
-            nn.Dropout(p=0.3),
-            nn.Linear(512, self.num_classes["triplet"]),
+        model.triplet_head = MultiTaskHead(
+            total_input_size, self.num_classes["triplet"]
         ).to(self.device)
+        # model.triplet_head = nn.Sequential(
+        #     nn.LayerNorm(total_input_size),
+        #     nn.Dropout(p=0.5),
+        #     nn.Linear(total_input_size, 512),
+        #     nn.GELU(),
+        #     nn.Dropout(p=0.3),
+        #     nn.Linear(512, self.num_classes["triplet"]),
+        # ).to(self.device)
         # We need to remove the original classification head
         model.head = nn.Identity()
 
@@ -85,37 +88,36 @@ class ModelValidator:
         model.load_state_dict(torch.load(self.model_path, weights_only=True))
         return model
 
-    def _forward_pass(self, inputs, mode="teacher"):
+    def _forward_pass(self, inputs):
         """Perform forward pass through the model based on the model type [teacher, student]"""
         features = self.model(inputs)
-        if mode == "teacher":
-            # Get individual component predictions
-            verb_logits = self.model.verb_head(features)
-            instrument_logits = self.model.instrument_head(features)
-            target_logits = self.model.target_head(features)
-            # Apply cross-attention fusion
-            attention_output = self.cross_attention(
-                verb_logits, instrument_logits, target_logits
-            )
-            # Combine all features for triplet prediction
-            combined_features = torch.cat(
-                [
-                    features,  # original features from backbone
-                    verb_logits,  # verb predictions
-                    instrument_logits,  # instrument predictions
-                    target_logits,  # target predictions
-                    attention_output,  # attention-fused features
-                ],
-                dim=1,
-            )
-            triplet_logits = self.model.triplet_head(combined_features)
+        # Get individual component predictions
+        verb_logits = self.model.verb_head(features)
+        instrument_logits = self.model.instrument_head(features)
+        target_logits = self.model.target_head(features)
+        # Apply attention module
+        attention_output = self.cross_attention(
+            verb_logits, instrument_logits, target_logits
+        )
+        # Combine all features for triplet prediction
+        combined_features = torch.cat(
+            [
+                features,  # original features from backbone
+                verb_logits,  # verb predictions
+                instrument_logits,  # instrument predictions
+                target_logits,  # target predictions
+                attention_output,  # attention-fused features
+            ],
+            dim=1,
+        )
+        triplet_logits = self.model.triplet_head(combined_features)
 
-            return {
-                "verb": verb_logits,
-                "instrument": instrument_logits,
-                "target": target_logits,
-                "triplet": triplet_logits,
-            }
+        return {
+            "verb": verb_logits,
+            "instrument": instrument_logits,
+            "target": target_logits,
+            "triplet": triplet_logits,
+        }
 
     def validate(self):
         """Validate the model and compute metrics"""
@@ -176,10 +178,10 @@ class ModelValidator:
 
         # Compute video-level AP metrics
         results = {
-            "triplet": recognize.compute_video_AP("ivt", ignore_null=True),
-            "verb": recognize.compute_video_AP("v", ignore_null=True),
-            "instrument": recognize.compute_video_AP("i", ignore_null=True),
-            "target": recognize.compute_video_AP("t", ignore_null=True),
+            "triplet": recognize.compute_video_AP("ivt"),
+            "verb": recognize.compute_video_AP("v"),
+            "instrument": recognize.compute_video_AP("i"),
+            "target": recognize.compute_video_AP("t"),
         }
 
         print("\nVideo-level Validation Results:")
@@ -189,12 +191,13 @@ class ModelValidator:
             print(f"Video-level AP: {results[task]['AP']}")
 
         global_results = {
-            "triplet": recognize.compute_global_AP("ivt", ignore_null=True),
-            "verb": recognize.compute_global_AP("v", ignore_null=True),
-            "instrument": recognize.compute_global_AP("i", ignore_null=True),
-            "target": recognize.compute_global_AP("t", ignore_null=True),
+            "triplet": recognize.compute_global_AP("ivt"),
+            "verb": recognize.compute_global_AP("v"),
+            "instrument": recognize.compute_global_AP("i"),
+            "target": recognize.compute_global_AP("t"),
         }
 
+        print("-" * 50)
         print("\nGlobal Validation Results (for comparison):")
         for task in ["verb", "instrument", "target", "triplet"]:
             print(f"{task.capitalize()} Results:")
@@ -205,9 +208,11 @@ def main():
     CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
-    MODEL_PATH = (
-        r"04_models_dir/training_20250217_103632/best_model_triplet_teacher.pth"
-    )
+    # MODEL_PATH = (
+    #     r"04_models_dir/training_20250217_103632/best_model_triplet_teacher.pth"
+    # )
+
+    MODEL_PATH = r"04_models_dir/training_20250303_210103/best_model_teacher.pth"
 
     torch.cuda.set_device(1)
     DEVICE = torch.device("cuda:1")
@@ -240,6 +245,7 @@ def main():
         device=DEVICE,
         model_path=MODEL_PATH,
         triplet_to_ivt=val_dataset.triplet_to_ivt,
+        guidance_scale=configs["guidance_scale"],
     )
 
     # Run validation

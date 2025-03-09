@@ -70,6 +70,7 @@ def main():
         learning_rate=configs["learning_rate"],
         weight_decay=configs["weight_decay"],
         hidden_layer_dim=configs["hidden_layer_dim"],
+        gradient_clipping=configs["gradient_clipping"],
         guidance_scale=configs["guidance_scale"],
         device=DEVICE,
         logger=logger,

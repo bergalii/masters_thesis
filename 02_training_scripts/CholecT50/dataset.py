@@ -70,35 +70,37 @@ class MultiTaskVideoDataset(Dataset):
                 # Color adjustments
                 A.OneOf(
                     [
-                        A.RandomGamma(gamma_limit=(90, 110), p=0.5),
+                        A.RandomGamma(gamma_limit=(80, 120), p=0.4),
                         A.RandomBrightnessContrast(
-                            brightness_limit=(-0.07, 0.07),
-                            contrast_limit=(-0.07, 0.07),
-                            p=0.5,
-                        ),
-                        A.HueSaturationValue(
-                            hue_shift_limit=5,
-                            sat_shift_limit=10,
-                            val_shift_limit=10,
+                            brightness_limit=(-0.2, 0.2),
+                            contrast_limit=(-0.2, 0.2),
                             p=0.4,
                         ),
+                        A.HueSaturationValue(
+                            hue_shift_limit=15,
+                            sat_shift_limit=15,
+                            val_shift_limit=15,
+                            p=0.3,
+                        ),
                     ],
-                    p=0.4,
+                    p=0.6,
                 ),
+                # Flips
+                A.OneOf([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5)]),
                 # Detail enhancement
                 A.CLAHE(clip_limit=(1, 1.3), tile_grid_size=(6, 6), p=0.3),
-                # Spatial transforms
-                A.Affine(
-                    scale=(0.9, 1.1),
-                    translate_percent=(
-                        0.05,
-                        0.05,
-                    ),
-                    rotate=(-10, 10),
-                    interpolation=cv2.INTER_LINEAR,
-                    border_mode=cv2.BORDER_CONSTANT,
-                    p=0.3,
-                ),
+                # # Spatial transforms
+                # A.Affine(
+                #     scale=(0.9, 1.1),
+                #     translate_percent=(
+                #         0.05,
+                #         0.05,
+                #     ),
+                #     rotate=(-10, 10),
+                #     interpolation=cv2.INTER_LINEAR,
+                #     border_mode=cv2.BORDER_CONSTANT,
+                #     p=0.3,
+                # ),
                 # Blurs to simulate focus variations
                 A.OneOf(
                     [
@@ -109,16 +111,8 @@ class MultiTaskVideoDataset(Dataset):
                     ],
                     p=0.2,
                 ),
-                # Noise and quality variations
-                A.OneOf(
-                    [
-                        A.GaussNoise(std_range=(0.1, 0.2), p=0.3),
-                        A.ImageCompression(quality_range=(85, 95), p=0.3),
-                    ],
-                    p=0.3,
-                ),
-                # Flips
-                A.HorizontalFlip(p=0.5),
+                # Noise
+                A.GaussNoise(std_range=(0.1, 0.2), p=0.3),
             ]
         )
 
@@ -379,11 +373,8 @@ class MultiTaskVideoDataset(Dataset):
 
         # Load video (same as before)
         video_path = f"{self.clips_dir}/{row['file_name']}"
-        video = VideoReader(
-            video_path, width=self.frame_width, height=self.frame_height, ctx=cpu(0)
-        )
-
-        total_frames = len(video)
+        original_video = VideoReader(video_path, ctx=cpu(0))
+        total_frames = len(original_video)
 
         if self.train:
             # Calculate the ranges for start and end indices
@@ -410,7 +401,50 @@ class MultiTaskVideoDataset(Dataset):
             # Evenly spaced sampling for validation clips
             indices = np.linspace(0, total_frames - 1, self.clip_length, dtype=int)
 
-        frames = video.get_batch(indices).asnumpy()
+        # Get the sampled frames
+        original_frames = original_video.get_batch(indices).asnumpy()
+
+        # Process each frame individually to handle camera movement
+        processed_frames = []
+        threshold = 20  # Threshold for black border detection
+        margin = 5  # Margin around detected content
+
+        for frame in original_frames:
+            # Detect borders for this specific frame
+            col_sums = np.sum(frame, axis=(0, 2))
+            col_mask = (
+                col_sums > threshold * frame.shape[0]
+            )  # Scale threshold by height
+
+            # Find where content begins (left border) and ends (right border)
+            non_zero_indices = np.where(col_mask)[0]
+
+            if len(non_zero_indices) > 0:
+                left_border = non_zero_indices[0]
+                right_border = non_zero_indices[-1]
+            else:
+                # Fallback if detection fails
+                left_border = 0
+                right_border = frame.shape[1] - 1
+
+            # Add a margin to ensure we don't crop too aggressively
+            left_border = max(0, left_border - margin)
+            right_border = min(frame.shape[1] - 1, right_border + margin)
+
+            # Crop the frame to the detected content area
+            cropped_frame = frame[:, left_border : right_border + 1, :]
+
+            # Resize to the target dimensions
+            resized_frame = cv2.resize(
+                cropped_frame,
+                (self.frame_width, self.frame_height),
+                interpolation=cv2.INTER_LANCZOS4,
+            )
+
+            processed_frames.append(resized_frame)
+
+        # Stack frames back into a video
+        frames = np.stack(processed_frames)
 
         # Apply augmentations and preprocessing
         if self.train:
