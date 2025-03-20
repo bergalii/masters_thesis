@@ -24,6 +24,7 @@ class MultiTaskSelfDistillationTrainer:
         dir_name: str,
         learning_rate: float,
         weight_decay: float,
+        attention_module_common_dim: int,
         hidden_layer_dim: int,
         gradient_clipping: float,
         warmup_epochs: int = 5,
@@ -40,6 +41,7 @@ class MultiTaskSelfDistillationTrainer:
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.hidden_layer_dim = hidden_layer_dim
+        self.attention_module_common_dim = attention_module_common_dim
         self.gradient_clipping = gradient_clipping
         self.guidance_scale = guidance_scale
         self.task_weights = {
@@ -60,9 +62,13 @@ class MultiTaskSelfDistillationTrainer:
             [triplet_to_ivt[idx] for idx in range(len(triplet_to_ivt))],
             device=device,
         )
+        # self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
+        self.feature_dims = {
+            "verb": 512,
+            "instrument": 512,
+            "target": 512,
+        }
 
-        self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
-        self.attention_module = AttentionModule(self.feature_dims).to(self.device)
         self._configure_models()
 
     def _initialize_guidance_matrices(self, triplet_to_ivt):
@@ -92,20 +98,30 @@ class MultiTaskSelfDistillationTrainer:
 
         # Teacher heads
         self.teacher_model.verb_head = MultiTaskHead(
-            in_features, self.num_classes["verb"]
+            in_features, self.num_classes["verb"], self.hidden_layer_dim
         ).to(self.device)
         self.teacher_model.instrument_head = MultiTaskHead(
-            in_features, self.num_classes["instrument"]
+            in_features, self.num_classes["instrument"], self.hidden_layer_dim
         ).to(self.device)
         self.teacher_model.target_head = MultiTaskHead(
-            in_features, self.num_classes["target"]
+            in_features, self.num_classes["target"], self.hidden_layer_dim
+        ).to(self.device)
+
+        self.teacher_model.attention_module = AttentionModule(
+            self.feature_dims, self.attention_module_common_dim
         ).to(self.device)
 
         # Teacher triplet head combines the ivt heads output features
-        common_dim = self.attention_module.common_dim
-        total_input_size = in_features + 3 * common_dim
+        common_dim = self.teacher_model.attention_module.common_dim
+        total_input_size = (
+            in_features
+            + 3 * common_dim
+            + self.num_classes["verb"]
+            + self.num_classes["instrument"]
+            + self.num_classes["target"]
+        )
         self.teacher_model.triplet_head = MultiTaskHead(
-            total_input_size, self.num_classes["triplet"]
+            total_input_size, self.num_classes["triplet"], self.hidden_layer_dim
         ).to(self.device)
 
         # Deep copy the teacher model to create identical student model
@@ -119,91 +135,91 @@ class MultiTaskSelfDistillationTrainer:
             self._create_optimizer_and_scheduler(self.student_model)
         )
 
-    # def _create_optimizer_and_scheduler(self, model):
-    #     """Create optimizer and scheduler with parameter groups"""
-
-    #     decay_params, no_decay_params = [], []
-    #     for name, param in model.named_parameters():
-    #         if param.requires_grad:
-    #             (no_decay_params if "bias" in name else decay_params).append(param)
-
-    #     optimizer = SGD(
-    #         [
-    #             {"params": decay_params, "weight_decay": self.weight_decay},
-    #             {"params": no_decay_params, "weight_decay": 0.0},
-    #         ],
-    #         lr=self.learning_rate,
-    #         momentum=0.9,
-    #         nesterov=True,
-    #     )
-
-    #     scheduler = ReduceLROnPlateau(optimizer, mode="max", factor=0.1, patience=5)
-    #     return optimizer, scheduler
-
     def _create_optimizer_and_scheduler(self, model):
         """Create optimizer and scheduler with parameter groups"""
 
-        # Separate backbone and heads for different learning rates
-        backbone_params = []
-        head_params = []
+        # Separate parameters into four groups
+        backbone_params_decay = []
+        backbone_params_no_decay = []
+        head_params_decay = []
+        head_params_no_decay = []
+
         for name, param in model.named_parameters():
-            if param.requires_grad:
-                if "head" in name:
-                    head_params.append(param)
+            if not param.requires_grad:
+                continue
+
+            # Check if the parameter should have weight decay
+            if "bias" in name or "norm" in name or "bn" in name:
+                no_decay = True
+            else:
+                no_decay = False
+
+            # Determine if it's a backbone or head parameter
+            if "head" in name or "attention_module" in name:
+                if no_decay:
+                    head_params_no_decay.append(param)
                 else:
-                    backbone_params.append(param)
+                    head_params_decay.append(param)
+            else:
+                if no_decay:
+                    backbone_params_no_decay.append(param)
+                else:
+                    backbone_params_decay.append(param)
 
-        # Add attention module parameters to head_params
-        for param in self.attention_module.parameters():
-            if param.requires_grad:
-                head_params.append(param)
-
-        # Use AdamW instead of SGD
         optimizer = torch.optim.AdamW(
             [
                 {
-                    "params": backbone_params,
+                    "params": backbone_params_decay,
                     "lr": self.learning_rate / 10,
                     "weight_decay": self.weight_decay,
                 },
                 {
-                    "params": head_params,
+                    "params": backbone_params_no_decay,
+                    "lr": self.learning_rate / 10,
+                    "weight_decay": 0.0,
+                },
+                {
+                    "params": head_params_decay,
                     "lr": self.learning_rate,
                     "weight_decay": self.weight_decay,
+                },
+                {
+                    "params": head_params_no_decay,
+                    "lr": self.learning_rate,
+                    "weight_decay": 0.0,
                 },
             ]
         )
 
-        # Use cosine annealing with warm restarts
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-            optimizer, T_0=10, T_mult=1, eta_min=self.learning_rate / 100
-        )
-
+        scheduler = ReduceLROnPlateau(optimizer, mode="max", factor=0.1, patience=5)
         return optimizer, scheduler
 
     def _forward_pass(self, model, inputs):
         """Perform forward pass through the model based on the model type [teacher, student]"""
-        features = model(inputs)
+        backbone_features = model(inputs)
         # Get individual component predictions
-        verb_logits = model.verb_head(features)
-        instrument_logits = model.instrument_head(features)
-        target_logits = model.target_head(features)
+        verb_logits, verb_hidden = model.verb_head(backbone_features)
+        instrument_logits, inst_hidden = model.instrument_head(backbone_features)
+        target_logits, target_hidden = model.target_head(backbone_features)
 
         # Apply attention module
-        attention_output = self.attention_module(
-            verb_logits, instrument_logits, target_logits
+        attention_output = model.attention_module(
+            verb_hidden, inst_hidden, target_hidden
         )
 
         # Combine all features for triplet prediction
         combined_features = torch.cat(
             [
-                features,  # original features from backbone
+                backbone_features,  # original features from backbone
                 attention_output,  # attention-fused features
+                verb_logits,  # direct class predictions
+                instrument_logits,
+                target_logits,
             ],
             dim=1,
         )
 
-        triplet_logits = model.triplet_head(combined_features)
+        triplet_logits, _ = model.triplet_head(combined_features)
 
         return {
             "verb": verb_logits,
@@ -212,7 +228,7 @@ class MultiTaskSelfDistillationTrainer:
             "triplet": triplet_logits,
         }
 
-    def _calculate_consistency_loss(self, triplet_logits, component_logits, alpha=0.25):
+    def _calculate_consistency_loss(self, triplet_logits, component_logits, alpha=0.2):
         """
         Enforce consistency between triplet predictions and component predictions
 
@@ -325,7 +341,7 @@ class MultiTaskSelfDistillationTrainer:
             # Normalize weights relative to each other, while keeping their average at 0.5
             self.task_weights[task] = (
                 (1.0 / (validation_metrics[task] + 0.1)) / total_inverse
-            ) * 0.75
+            ) * 1.0
 
         # Keep triplet weight fixed at 1.0
         self.task_weights["triplet"] = 1.0
@@ -374,6 +390,16 @@ class MultiTaskSelfDistillationTrainer:
             triplet_map = val_metrics.get("triplet")
             # Update learning rate scheduler
             lr_scheduler.step(triplet_map)
+
+            # Log the new learning rate
+            current_lrs = [group["lr"] for group in optimizer.param_groups]
+            if len(current_lrs) == 1:
+                self.logger.info(f"Learning rate: {current_lrs[0]:.6f}")
+            else:
+                self.logger.info(
+                    f"Learning rates: {[f'{lr:.6f}' for lr in current_lrs]}"
+                )
+
             # Update dynamic weights
             self._update_task_weights(val_metrics)
 
@@ -485,13 +511,9 @@ class MultiTaskSelfDistillationTrainer:
 
         # Train the teacher model
         self.logger.info("Training teacher model...")
-        model_params = sum(
+        total_trainable_params = sum(
             p.numel() for p in self.teacher_model.parameters() if p.requires_grad
         )
-        attention_params = sum(
-            p.numel() for p in self.attention_module.parameters() if p.requires_grad
-        )
-        total_trainable_params = model_params + attention_params
         self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
         self.logger.info("-" * 50)
         self._train_model(

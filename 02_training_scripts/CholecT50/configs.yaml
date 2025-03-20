@@ -9,11 +9,11 @@ val_split: 2
 train_ratio: 0.80
 learning_rate: 0.001
 weight_decay: 0.001
-cross_attention_dim: 128
+attention_module_common_dim: 256
 hidden_layer_dim: 512
 warmup_epochs: 5
 temperature: 2.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 
-guidance_scale: 1.0
+guidance_scale: 1.0 
 fpn_out_channels: 256

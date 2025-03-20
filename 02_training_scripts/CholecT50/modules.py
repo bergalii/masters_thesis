@@ -13,472 +13,183 @@ from torchvision.ops.misc import Conv3dNormActivation
 from torchvision.utils import _log_api_usage_once
 
 
-class CrossTaskAttention(nn.Module):
-    """Cross-task attention mechanism for I-V-T components"""
+# class AttentionModule(nn.Module):
+#     def __init__(
+#         self, feature_dims, common_dim, num_layers=2, num_heads=8, dropout=0.1
+#     ):
+#         super().__init__()
+#         self.common_dim = common_dim
 
-    def __init__(self, common_dim, num_heads=4):
-        super().__init__()
-        self.common_dim = common_dim
-        self.num_heads = num_heads
-        self.head_dim = common_dim // num_heads
+#         # Project each component's features to a common dimension
+#         self.component_projections = nn.ModuleDict(
+#             {
+#                 k: nn.Sequential(
+#                     nn.Linear(v, common_dim),
+#                     nn.LayerNorm(common_dim),
+#                     nn.Dropout(dropout),
+#                 )
+#                 for k, v in feature_dims.items()
+#             }
+#         )
 
-        # Create task-specific projections
-        # Each task has its own Q, K, V projections
-        self.task_projections = nn.ModuleDict(
-            {
-                "instrument": self._create_projections(),
-                "verb": self._create_projections(),
-                "target": self._create_projections(),
-            }
-        )
+#         # Cross-attention layers between components
+#         self.cross_attention = nn.ModuleDict(
+#             {
+#                 # Each component attends to others
+#                 "verb_to_others": nn.MultiheadAttention(
+#                     common_dim, num_heads, dropout=dropout, batch_first=True
+#                 ),
+#                 "instrument_to_others": nn.MultiheadAttention(
+#                     common_dim, num_heads, dropout=dropout, batch_first=True
+#                 ),
+#                 "target_to_others": nn.MultiheadAttention(
+#                     common_dim, num_heads, dropout=dropout, batch_first=True
+#                 ),
+#             }
+#         )
 
-        # Output projections
-        self.output_projections = nn.ModuleDict(
-            {
-                "instrument": nn.Linear(common_dim, common_dim),
-                "verb": nn.Linear(common_dim, common_dim),
-                "target": nn.Linear(common_dim, common_dim),
-            }
-        )
+#         # Layer norms for pre and post attention
+#         self.pre_cross_norm = nn.ModuleDict(
+#             {k: nn.LayerNorm(common_dim) for k in feature_dims.keys()}
+#         )
+#         self.post_cross_norm = nn.ModuleDict(
+#             {k: nn.LayerNorm(common_dim) for k in feature_dims.keys()}
+#         )
 
-        # Layer norms for each task
-        self.layer_norms = nn.ModuleDict(
-            {
-                "instrument": nn.LayerNorm(common_dim),
-                "verb": nn.LayerNorm(common_dim),
-                "target": nn.LayerNorm(common_dim),
-            }
-        )
+#         # Add a "global token" that can attend to all components
+#         self.global_token = nn.Parameter(torch.randn(1, 1, common_dim) * 0.02)
 
-        self.dropout = nn.Dropout(0.1)
+#         # Create transformer encoder for sequence processing
+#         encoder_layer = nn.TransformerEncoderLayer(
+#             common_dim,
+#             num_heads,
+#             dim_feedforward=4 * common_dim,
+#             dropout=dropout,
+#             batch_first=True,
+#             norm_first=True,  # Pre-norm architecture for better training stability
+#         )
+#         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
 
-    def _create_projections(self):
-        """Create query, key, value projections for a task"""
-        return nn.ModuleDict(
-            {
-                "query": nn.Linear(self.common_dim, self.common_dim),
-                "key": nn.Linear(self.common_dim, self.common_dim),
-                "value": nn.Linear(self.common_dim, self.common_dim),
-            }
-        )
+#         # Final output processing
+#         self.output_projection = nn.Sequential(
+#             nn.Linear(
+#                 4 * common_dim, 3 * common_dim
+#             ),  # 4 = 3 components + global token
+#             nn.LayerNorm(3 * common_dim),
+#             nn.GELU(),
+#             nn.Dropout(dropout),
+#         )
 
-    def _split_heads(self, x):
-        """Split the last dimension into (num_heads, head_dim)"""
-        batch_size = x.size(0)
-        x = x.view(batch_size, -1, self.num_heads, self.head_dim)
-        return x.permute(0, 2, 1, 3)  # [batch_size, num_heads, seq_len, head_dim]
+#     def forward(self, verb_feat, inst_feat, target_feat):
+#         batch_size = verb_feat.size(0)
 
-    def _combine_heads(self, x):
-        """Combine the heads back into original shape"""
-        batch_size = x.size(0)
-        x = x.permute(0, 2, 1, 3)  # [batch_size, seq_len, num_heads, head_dim]
-        return x.contiguous().view(batch_size, -1, self.common_dim)
+#         # Project inputs to common dimension
+#         verb_proj = self.component_projections["verb"](verb_feat)
+#         inst_proj = self.component_projections["instrument"](inst_feat)
+#         target_proj = self.component_projections["target"](target_feat)
 
-    def _scale_dot_product_attention(self, q, k, v):
-        """Compute scaled dot-product attention"""
-        d_k = torch.sqrt(torch.tensor(q.size(-1), dtype=torch.float32, device=q.device))
-        scores = torch.matmul(q, k.transpose(-2, -1)) / d_k
-        attention_weights = torch.softmax(scores, dim=-1)
-        output = torch.matmul(attention_weights, v)
-        return output
+#         # Reshape for attention - make sure they have a sequence dimension
+#         verb_seq = verb_proj.unsqueeze(1)  # [batch, 1, common_dim]
+#         inst_seq = inst_proj.unsqueeze(1)  # [batch, 1, common_dim]
+#         target_seq = target_proj.unsqueeze(1)  # [batch, 1, common_dim]
 
-    def forward(self, inst_emb, verb_emb, target_emb):
-        """
-        Apply cross-task attention
+#         # Apply cross-attention with residual connections
+#         # Verb attends to instrument and target
+#         norm_verb = self.pre_cross_norm["verb"](verb_seq)
+#         kv_for_verb = torch.cat([inst_seq, target_seq], dim=1)
+#         verb_cross, _ = self.cross_attention["verb_to_others"](
+#             norm_verb, kv_for_verb, kv_for_verb
+#         )
+#         verb_cross = verb_seq + verb_cross  # Residual connection
+#         verb_cross = self.post_cross_norm["verb"](verb_cross)
 
-        Args:
-            inst_emb: Instrument embeddings [batch_size, common_dim]
-            verb_emb: Verb embeddings [batch_size, common_dim]
-            target_emb: Target embeddings [batch_size, common_dim]
+#         # Instrument attends to verb and target
+#         norm_inst = self.pre_cross_norm["instrument"](inst_seq)
+#         kv_for_inst = torch.cat([verb_seq, target_seq], dim=1)
+#         inst_cross, _ = self.cross_attention["instrument_to_others"](
+#             norm_inst, kv_for_inst, kv_for_inst
+#         )
+#         inst_cross = inst_seq + inst_cross  # Residual connection
+#         inst_cross = self.post_cross_norm["instrument"](inst_cross)
 
-        Returns:
-            Updated embeddings for each task
-        """
+#         # Target attends to verb and instrument
+#         norm_target = self.pre_cross_norm["target"](target_seq)
+#         kv_for_target = torch.cat([verb_seq, inst_seq], dim=1)
+#         target_cross, _ = self.cross_attention["target_to_others"](
+#             norm_target, kv_for_target, kv_for_target
+#         )
+#         target_cross = target_seq + target_cross  # Residual connection
+#         target_cross = self.post_cross_norm["target"](target_cross)
 
-        # Store original embeddings for residual connections
-        inst_residual = inst_emb
-        verb_residual = verb_emb
-        target_residual = target_emb
+#         # Expand global token to batch size
+#         global_token = self.global_token.expand(batch_size, -1, -1)
 
-        # Create task-specific queries
-        inst_q = self._split_heads(
-            self.task_projections["instrument"]["query"](inst_emb).unsqueeze(1)
-        )
-        verb_q = self._split_heads(
-            self.task_projections["verb"]["query"](verb_emb).unsqueeze(1)
-        )
-        target_q = self._split_heads(
-            self.task_projections["target"]["query"](target_emb).unsqueeze(1)
-        )
+#         # Concatenate all tokens (including global token) for transformer processing
+#         all_tokens = torch.cat(
+#             [global_token, verb_cross, inst_cross, target_cross],  # Global token first
+#             dim=1,
+#         )  # [batch, 4, common_dim]
 
-        # Create task-specific keys and values
-        inst_k = self._split_heads(
-            self.task_projections["instrument"]["key"](inst_emb).unsqueeze(1)
-        )
-        verb_k = self._split_heads(
-            self.task_projections["verb"]["key"](verb_emb).unsqueeze(1)
-        )
-        target_k = self._split_heads(
-            self.task_projections["target"]["key"](target_emb).unsqueeze(1)
-        )
+#         # Process through transformer encoder
+#         transformed = self.transformer(all_tokens)
 
-        inst_v = self._split_heads(
-            self.task_projections["instrument"]["value"](inst_emb).unsqueeze(1)
-        )
-        verb_v = self._split_heads(
-            self.task_projections["verb"]["value"](verb_emb).unsqueeze(1)
-        )
-        target_v = self._split_heads(
-            self.task_projections["target"]["value"](target_emb).unsqueeze(1)
-        )
+#         # Reshape and project to final output
+#         batch_size = transformed.size(0)
+#         flattened = transformed.reshape(batch_size, -1)
 
-        # Concatenate all keys and values
-        all_keys = torch.cat([inst_k, verb_k, target_k], dim=2)
-        all_values = torch.cat([inst_v, verb_v, target_v], dim=2)
-
-        # Compute attention for each task's query against all keys/values
-        inst_attn = self._scale_dot_product_attention(inst_q, all_keys, all_values)
-        verb_attn = self._scale_dot_product_attention(verb_q, all_keys, all_values)
-        target_attn = self._scale_dot_product_attention(target_q, all_keys, all_values)
-
-        # Combine heads and squeeze the sequence dimension
-        inst_attn = self._combine_heads(inst_attn).squeeze(1)
-        verb_attn = self._combine_heads(verb_attn).squeeze(1)
-        target_attn = self._combine_heads(target_attn).squeeze(1)
-
-        # Project outputs
-        inst_output = self.output_projections["instrument"](inst_attn)
-        verb_output = self.output_projections["verb"](verb_attn)
-        target_output = self.output_projections["target"](target_attn)
-
-        # Apply dropout
-        inst_output = self.dropout(inst_output)
-        verb_output = self.dropout(verb_output)
-        target_output = self.dropout(target_output)
-
-        # Add residual connections and normalize
-        inst_output = self.layer_norms["instrument"](inst_output + inst_residual)
-        verb_output = self.layer_norms["verb"](verb_output + verb_residual)
-        target_output = self.layer_norms["target"](target_output + target_residual)
-
-        return inst_output, verb_output, target_output
-
-
-class FFNLayer(nn.Module):
-    """Feed-forward network layer inspired by Rendezvous FFN"""
-
-    def __init__(self, d_model, expansion_factor=4):
-        super().__init__()
-        self.linear1 = nn.Linear(d_model, d_model * expansion_factor)
-        self.linear2 = nn.Linear(d_model * expansion_factor, d_model)
-        self.activation = nn.GELU()
-        self.norm = nn.LayerNorm(d_model)
-        self.dropout = nn.Dropout(0.1)
-
-    def forward(self, x):
-        residual = x
-        x = self.linear1(x)
-        x = self.activation(x)
-        x = self.dropout(x)
-        x = self.linear2(x)
-        x = self.norm(x + residual)
-        return x
+#         return self.output_projection(flattened)
 
 
 class AttentionModule(nn.Module):
-    """Attention module with explicit cross-task attention"""
-
-    def __init__(self, feature_dims, num_layers=2, num_heads=4, common_dim=256):
+    def __init__(self, feature_dims, common_dim, num_layers=2, num_heads=4):
         super().__init__()
         self.common_dim = common_dim
-
-        # Project features to common dimensional space
         self.component_embeddings = nn.ModuleDict(
             {k: nn.Linear(v, common_dim) for k, v in feature_dims.items()}
         )
 
-        # Stack of cross-task attention and FFN layers
-        self.layers = nn.ModuleList()
-        for _ in range(num_layers):
-            self.layers.append(CrossTaskAttention(common_dim, num_heads))
-            self.layers.append(
-                nn.ModuleDict(
-                    {
-                        "instrument": FFNLayer(common_dim),
-                        "verb": FFNLayer(common_dim),
-                        "target": FFNLayer(common_dim),
-                    }
-                )
-            )
+        encoder_layer = nn.TransformerEncoderLayer(
+            common_dim, num_heads, dim_feedforward=4 * common_dim, batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
 
     def forward(self, verb_feat, inst_feat, target_feat):
-        """
-        Process features through the attention module
+        # Project features to common space
+        verb_emb = self.component_embeddings["verb"](verb_feat).unsqueeze(1)
+        inst_emb = self.component_embeddings["instrument"](inst_feat).unsqueeze(1)
+        target_emb = self.component_embeddings["target"](target_feat).unsqueeze(1)
 
-        Args:
-            verb_feat: Verb features [batch_size, verb_dim]
-            inst_feat: Instrument features [batch_size, inst_dim]
-            target_feat: Target features [batch_size, target_dim]
+        # Concatenate as sequence tokens
+        tokens = torch.cat([verb_emb, inst_emb, target_emb], dim=1)
 
-        Returns:
-            Processed features [batch_size, 3*common_dim]
-        """
-        # Project to common dimensional space
-        verb_emb = self.component_embeddings["verb"](verb_feat)
-        inst_emb = self.component_embeddings["instrument"](inst_feat)
-        target_emb = self.component_embeddings["target"](target_feat)
+        # Process through transformer
+        transformed = self.transformer(tokens)
 
-        # Process through cross-task attention and FFN layers
-        for i in range(0, len(self.layers), 2):
-            # Cross-task attention layer
-            inst_emb, verb_emb, target_emb = self.layers[i](
-                inst_emb, verb_emb, target_emb
-            )
-
-            # Feed-forward layer for each task
-            ffn_layer = self.layers[i + 1]
-            inst_emb = ffn_layer["instrument"](inst_emb)
-            verb_emb = ffn_layer["verb"](verb_emb)
-            target_emb = ffn_layer["target"](target_emb)
-
-        # Concatenate all embeddings for final output
-        output = torch.cat([inst_emb, verb_emb, target_emb], dim=1)
-        return output  # [batch_size, 3*common_dim]
+        # Flatten the sequence dimension
+        batch_size = transformed.size(0)
+        return transformed.reshape(batch_size, -1)
 
 
 class MultiTaskHead(nn.Module):
-    """Classification head for each task (verb, instrument, target)"""
-
-    def __init__(self, in_features: int, num_classes: int):
+    def __init__(self, in_features: int, num_classes: int, hidden_layer_dim: int):
         super().__init__()
-        self.head = nn.Sequential(
+        # Extract hidden features for attention
+        self.hidden = nn.Sequential(
             nn.LayerNorm(in_features),
             nn.Dropout(p=0.5),
-            nn.Linear(in_features, 512),
+            nn.Linear(in_features, hidden_layer_dim),
             nn.GELU(),
+        )
+        # Classification layer
+        self.classifier = nn.Sequential(
             nn.Dropout(p=0.3),
-            nn.Linear(512, num_classes),
+            nn.Linear(hidden_layer_dim, num_classes),
         )
 
     def forward(self, x):
-        return self.head(x)
-
-
-# class AttentionModule(nn.Module):  # 4th version
-#     def __init__(self, feature_dims, num_layers=2, num_heads=4, common_dim=256):
-#         super().__init__()
-#         self.common_dim = common_dim
-#         self.component_embeddings = nn.ModuleDict(
-#             {k: nn.Linear(v, common_dim) for k, v in feature_dims.items()}
-#         )
-
-#         encoder_layer = nn.TransformerEncoderLayer(
-#             common_dim, num_heads, dim_feedforward=4 * common_dim, batch_first=True
-#         )
-#         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
-
-#     def forward(self, verb_feat, inst_feat, target_feat):
-#         # Project features to common space
-#         verb_emb = self.component_embeddings["verb"](verb_feat).unsqueeze(1)
-#         inst_emb = self.component_embeddings["instrument"](inst_feat).unsqueeze(1)
-#         target_emb = self.component_embeddings["target"](target_feat).unsqueeze(1)
-
-#         # Concatenate as sequence tokens
-#         tokens = torch.cat([verb_emb, inst_emb, target_emb], dim=1)
-
-#         # Process through transformer
-#         transformed = self.transformer(tokens)
-
-#         # Flatten the sequence dimension
-#         batch_size = transformed.size(0)
-#         return transformed.reshape(batch_size, -1)
-
-
-# class MHMA(nn.Module):
-#     """
-#     Multi-Head Mixed Attention module optimized for Swin3D features
-#     Combines self-attention and cross-attention mechanisms in a streamlined way
-#     """
-
-#     def __init__(self, feature_dims, hidden_dim=256, num_heads=4, dropout=0.1):
-#         super().__init__()
-#         self.hidden_dim = hidden_dim
-#         self.num_heads = num_heads
-#         self.head_dim = hidden_dim // num_heads
-
-#         # Create projection layers for each component
-#         self.proj_layers = nn.ModuleDict(
-#             {k: nn.Linear(v, hidden_dim) for k, v in feature_dims.items()}
-#         )
-
-#         # Query/key/value projections for cross-attention
-#         self.q_proj = nn.Linear(hidden_dim * 3, hidden_dim)
-#         self.k_proj = nn.ModuleDict(
-#             {k: nn.Linear(hidden_dim, hidden_dim) for k in feature_dims.keys()}
-#         )
-#         self.v_proj = nn.ModuleDict(
-#             {k: nn.Linear(hidden_dim, hidden_dim) for k in feature_dims.keys()}
-#         )
-
-#         # Self-attention for triplet features
-#         self.self_attention = nn.MultiheadAttention(
-#             embed_dim=hidden_dim, num_heads=num_heads, dropout=dropout, batch_first=True
-#         )
-
-#         # Output projection and normalization
-#         self.output_proj = nn.Linear(hidden_dim * 4, hidden_dim * 3)
-#         self.norm1 = nn.LayerNorm(hidden_dim * 3)
-#         self.norm2 = nn.LayerNorm(hidden_dim * 3)
-#         self.dropout = nn.Dropout(dropout)
-#         self.ffn = nn.Sequential(
-#             nn.Linear(hidden_dim * 3, hidden_dim * 4),
-#             nn.GELU(),
-#             nn.Dropout(dropout),
-#             nn.Linear(hidden_dim * 4, hidden_dim * 3),
-#         )
-
-#     def forward(self, features):
-#         # Unpack component features
-#         instrument_feat = features["instrument"]
-#         verb_feat = features["verb"]
-#         target_feat = features["target"]
-
-#         # Project each component to common dimension
-#         inst_proj = self.proj_layers["instrument"](instrument_feat)
-#         verb_proj = self.proj_layers["verb"](verb_feat)
-#         target_proj = self.proj_layers["target"](target_feat)
-
-#         # Concatenate for triplet representation
-#         triplet_feat = torch.cat([inst_proj, verb_proj, target_proj], dim=1)
-
-#         # Prepare for attention operations
-#         batch_size = triplet_feat.size(0)
-
-#         # Create query from triplet features
-#         query = self.q_proj(triplet_feat).view(
-#             batch_size, -1, self.num_heads, self.head_dim
-#         )
-#         query = query.transpose(1, 2)  # [batch, heads, seq_len, head_dim]
-
-#         # Create keys and values for each component
-#         keys = {
-#             k: self.k_proj[k](v)
-#             .view(batch_size, -1, self.num_heads, self.head_dim)
-#             .transpose(1, 2)
-#             for k, v in {
-#                 "instrument": inst_proj,
-#                 "verb": verb_proj,
-#                 "target": target_proj,
-#             }.items()
-#         }
-
-#         values = {
-#             k: self.v_proj[k](v)
-#             .view(batch_size, -1, self.num_heads, self.head_dim)
-#             .transpose(1, 2)
-#             for k, v in {
-#                 "instrument": inst_proj,
-#                 "verb": verb_proj,
-#                 "target": target_proj,
-#             }.items()
-#         }
-
-#         # Self-attention on triplet features
-#         # Reshape for self-attention
-#         triplet_for_self = triplet_feat.view(
-#             batch_size, 3, -1
-#         )  # [batch, 3, hidden_dim]
-#         self_output, _ = self.self_attention(
-#             triplet_for_self, triplet_for_self, triplet_for_self
-#         )
-#         self_output = self_output.reshape(batch_size, -1)  # [batch, 3*hidden_dim]
-
-#         # Cross-attention between triplet query and component keys/values
-#         def cross_attention(q, k, v):
-#             # Scale dot-product attention
-#             attn_weights = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(
-#                 self.head_dim
-#             )
-#             attn_weights = F.softmax(attn_weights, dim=-1)
-#             attn_weights = self.dropout(attn_weights)
-#             return torch.matmul(attn_weights, v)
-
-#         # Compute cross-attention for each component
-#         inst_attended = cross_attention(query, keys["instrument"], values["instrument"])
-#         verb_attended = cross_attention(query, keys["verb"], values["verb"])
-#         target_attended = cross_attention(query, keys["target"], values["target"])
-
-#         # Reshape and concatenate attention outputs
-#         attended_outputs = [
-#             x.transpose(1, 2).reshape(batch_size, -1)
-#             for x in [inst_attended, verb_attended, target_attended]
-#         ]
-
-#         # Concatenate all attention outputs with self-attention
-#         concat_attn = torch.cat([self_output] + attended_outputs, dim=1)
-
-#         # Project to output dimension with residual connection
-#         output = self.output_proj(concat_attn)
-#         output = self.norm1(output + triplet_feat)
-
-#         # Apply feed-forward network with residual connection
-#         ff_output = self.ffn(output)
-#         output = self.norm2(output + ff_output)
-
-#         return output
-
-# class AttentionModule(nn.Module):
-#     def __init__(self, feature_dims, num_layers=2, num_heads=4, common_dim=256):
-#         super().__init__()
-#         self.common_dim = common_dim
-#         self.feature_dims = feature_dims
-
-#         # Initial projection to common dimension
-#         self.projections = nn.ModuleDict({
-#             k: nn.Sequential(
-#                 nn.LayerNorm(v),
-#                 nn.Linear(v, common_dim)
-#             ) for k, v in feature_dims.items()
-#         })
-
-#         # Stack of MHMA layers
-#         self.mhma_layers = nn.ModuleList([
-#             MHMA(
-#                 feature_dims={k: common_dim for k in feature_dims},
-#                 hidden_dim=common_dim,
-#                 num_heads=num_heads,
-#                 dropout=0.1
-#             ) for _ in range(num_layers)
-#         ])
-
-#     def forward(self, verb_feat, inst_feat, target_feat):
-#         # Project to common dimension
-#         inst_proj = self.projections["instrument"](inst_feat)
-#         verb_proj = self.projections["verb"](verb_feat)
-#         target_proj = self.projections["target"](target_feat)
-
-#         # Process through MHMA layers
-#         features = {
-#             "instrument": inst_proj,
-#             "verb": verb_proj,
-#             "target": target_proj
-#         }
-
-#         # Initial triplet representation
-#         triplet_rep = torch.cat([inst_proj, verb_proj, target_proj], dim=1)
-
-#         # Process through stacked MHMA layers
-#         for mhma_layer in self.mhma_layers:
-#             triplet_rep = mhma_layer(features)
-
-#             # Update features for next layer
-#             features = {
-#                 "instrument": triplet_rep[:, :self.common_dim],
-#                 "verb": triplet_rep[:, self.common_dim:2*self.common_dim],
-#                 "target": triplet_rep[:, 2*self.common_dim:]
-#             }
-
-#         return triplet_rep
+        hidden_features = self.hidden(x)
+        logits = self.classifier(hidden_features)
+        return logits, hidden_features
 
 
 ###################### FPN Implementation #############################

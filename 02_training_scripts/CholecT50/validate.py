@@ -44,8 +44,12 @@ class ModelValidator:
             self.MV[verb, t] = 1
             self.MT[target, t] = 1
 
-        self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
-        self.cross_attention = AttentionModule(self.feature_dims).to(self.device)
+        # self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
+        self.feature_dims = {
+            "verb": 512,
+            "instrument": 512,
+            "target": 512,
+        }
         # Initialize and load the model
         self.model = self._initialize_model()
 
@@ -64,23 +68,14 @@ class ModelValidator:
             self.device
         )
 
+        model.attention_module = AttentionModule(self.feature_dims).to(self.device)
+
         # Teacher triplet head combines the ivt heads output features
-        common_dim = self.cross_attention.common_dim
-        total_input_size = (
-            in_features + sum(self.feature_dims.values()) + 3 * common_dim
-        )
+        common_dim = model.attention_module.common_dim
+        total_input_size = in_features + 3 * common_dim
         model.triplet_head = MultiTaskHead(
             total_input_size, self.num_classes["triplet"]
         ).to(self.device)
-        # model.triplet_head = nn.Sequential(
-        #     nn.LayerNorm(total_input_size),
-        #     nn.Dropout(p=0.5),
-        #     nn.Linear(total_input_size, 512),
-        #     nn.GELU(),
-        #     nn.Dropout(p=0.3),
-        #     nn.Linear(512, self.num_classes["triplet"]),
-        # ).to(self.device)
-        # We need to remove the original classification head
         model.head = nn.Identity()
 
         # Load the saved weights
@@ -89,23 +84,20 @@ class ModelValidator:
         return model
 
     def _forward_pass(self, inputs):
-        """Perform forward pass through the model based on the model type [teacher, student]"""
+        """Perform forward pass through the model"""
         features = self.model(inputs)
         # Get individual component predictions
         verb_logits = self.model.verb_head(features)
         instrument_logits = self.model.instrument_head(features)
         target_logits = self.model.target_head(features)
         # Apply attention module
-        attention_output = self.cross_attention(
+        attention_output = self.model.attention_module(
             verb_logits, instrument_logits, target_logits
         )
         # Combine all features for triplet prediction
         combined_features = torch.cat(
             [
                 features,  # original features from backbone
-                verb_logits,  # verb predictions
-                instrument_logits,  # instrument predictions
-                target_logits,  # target predictions
                 attention_output,  # attention-fused features
             ],
             dim=1,
@@ -208,11 +200,7 @@ def main():
     CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
-    # MODEL_PATH = (
-    #     r"04_models_dir/training_20250217_103632/best_model_triplet_teacher.pth"
-    # )
-
-    MODEL_PATH = r"04_models_dir/training_20250303_210103/best_model_teacher.pth"
+    MODEL_PATH = r"04_models_dir/training_20250311_202110/best_model_teacher.pth"
 
     torch.cuda.set_device(1)
     DEVICE = torch.device("cuda:1")
