@@ -359,7 +359,7 @@ class MultiTaskVideoDataset(Dataset):
         # Get annotation row
         row = self.annotations.iloc[idx]
 
-        # Load video
+        # Load video (same as before)
         video_path = f"{self.clips_dir}/{row['file_name']}"
         original_video = VideoReader(video_path, ctx=cpu(0))
         total_frames = len(original_video)
@@ -385,53 +385,57 @@ class MultiTaskVideoDataset(Dataset):
                 end_idx = random.randint(end_range, total_frames - 1)
                 # Create evenly spaced indices between start and end
                 indices = np.linspace(start_idx, end_idx, self.clip_length, dtype=int)
+        else:
+            # Evenly spaced sampling for validation clips
+            indices = np.linspace(0, total_frames - 1, self.clip_length, dtype=int)
 
-            # Get the sampled frames
-            original_frames = original_video.get_batch(indices).asnumpy()
+        # Get the sampled frames
+        original_frames = original_video.get_batch(indices).asnumpy()
 
-            # Process each frame individually to handle camera movement
-            processed_frames = []
-            threshold = 20  # Threshold for black border detection
-            margin = 5  # Margin around detected content
+        # Process each frame individually to handle camera movement
+        processed_frames = []
+        threshold = 20  # Threshold for black border detection
+        margin = 5  # Margin around detected content
 
-            for frame in original_frames:
-                # Detect borders for this specific frame
-                col_sums = np.sum(frame, axis=(0, 2))
-                col_mask = (
-                    col_sums > threshold * frame.shape[0]
-                )  # Scale threshold by height
+        for frame in original_frames:
+            # Detect borders for this specific frame
+            col_sums = np.sum(frame, axis=(0, 2))
+            col_mask = (
+                col_sums > threshold * frame.shape[0]
+            )  # Scale threshold by height
 
-                # Find where content begins (left border) and ends (right border)
-                non_zero_indices = np.where(col_mask)[0]
+            # Find where content begins (left border) and ends (right border)
+            non_zero_indices = np.where(col_mask)[0]
 
-                if len(non_zero_indices) > 0:
-                    left_border = non_zero_indices[0]
-                    right_border = non_zero_indices[-1]
-                else:
-                    # Fallback if detection fails
-                    left_border = 0
-                    right_border = frame.shape[1] - 1
+            if len(non_zero_indices) > 0:
+                left_border = non_zero_indices[0]
+                right_border = non_zero_indices[-1]
+            else:
+                # Fallback if detection fails
+                left_border = 0
+                right_border = frame.shape[1] - 1
 
-                # Add a margin to ensure not to crop too aggressively
-                left_border = max(0, left_border - margin)
-                right_border = min(frame.shape[1] - 1, right_border + margin)
+            # Add a margin to ensure we don't crop too aggressively
+            left_border = max(0, left_border - margin)
+            right_border = min(frame.shape[1] - 1, right_border + margin)
 
-                # Crop the frame to the detected content area
-                cropped_frame = frame[:, left_border : right_border + 1, :]
+            # Crop the frame to the detected content area
+            cropped_frame = frame[:, left_border : right_border + 1, :]
 
-                # Resize to the target dimensions
-                resized_frame = cv2.resize(
-                    cropped_frame,
-                    (self.frame_width, self.frame_height),
-                    interpolation=cv2.INTER_LANCZOS4,
-                )
+            # Resize to the target dimensions
+            resized_frame = cv2.resize(
+                cropped_frame,
+                (self.frame_width, self.frame_height),
+                interpolation=cv2.INTER_LANCZOS4,
+            )
 
-                processed_frames.append(resized_frame)
+            processed_frames.append(resized_frame)
 
-            # Stack frames back into a video
-            frames = np.stack(processed_frames)
+        # Stack frames back into a video
+        frames = np.stack(processed_frames)
 
-            # Apply augmentations
+        # Apply augmentations and preprocessing
+        if self.train:
             data = self.transform(image=frames[0])
             augmented_frames = []
             for frame in frames:
@@ -439,107 +443,9 @@ class MultiTaskVideoDataset(Dataset):
                 augmented_frames.append(augmented["image"])
             frames = np.stack(augmented_frames)
 
-            # Preprocess frames
-            frames = torch.stack([self.preprocess(frame) for frame in frames])
-            frames = frames.permute(1, 0, 2, 3)  # (C, T, H, W)
-
-            # Return a single clip for training
-            frames_tensor = frames
-        else:
-            # For validation, sample 4 clips from different parts of the video
-            all_clips = []
-            # Define sampling strategies for 4 clips
-            sampling_strategies = [
-                # Clip 1: Beginning section (00-40%)
-                (0.0, 0.4),
-                # Clip 2: Middle section (30-70%)
-                (0.3, 0.7),
-                # Clip 3: End section (60-100%)
-                (0.6, 1.0),
-                # Clip 4: Full video overview (evenly spaced)
-                (0.0, 1.0),
-            ]
-
-            for i, (start_percent, end_percent) in enumerate(sampling_strategies):
-                if i == 3:  # Last clip evenly spaced
-                    indices = np.linspace(
-                        0, total_frames - 1, self.clip_length, dtype=int
-                    )
-                else:
-                    # Calculate frame indices based on percentage
-                    start_idx = int(total_frames * start_percent)
-                    end_idx = int(total_frames * end_percent)
-
-                    # Ensure we have enough frames
-                    if end_idx - start_idx < self.clip_length:
-                        # Fall back to centered sampling in this segment
-                        mid_point = (start_idx + end_idx) // 2
-                        half_length = self.clip_length // 2
-                        start_idx = max(0, mid_point - half_length)
-                        end_idx = min(
-                            total_frames - 1, start_idx + self.clip_length - 1
-                        )
-                        indices = np.linspace(
-                            start_idx, end_idx, self.clip_length, dtype=int
-                        )
-                    else:
-                        indices = np.linspace(
-                            start_idx, end_idx, self.clip_length, dtype=int
-                        )
-
-                # Get the sampled frames for this clip
-                original_frames = original_video.get_batch(indices).asnumpy()
-
-                # Process each frame (black border detection)
-                processed_frames = []
-                threshold = 20  # Threshold for black border detection
-                margin = 5  # Margin around detected content
-
-                for frame in original_frames:
-                    # Detect borders for this specific frame
-                    col_sums = np.sum(frame, axis=(0, 2))
-                    col_mask = (
-                        col_sums > threshold * frame.shape[0]
-                    )  # Scale threshold by height
-
-                    # Find where content begins (left border) and ends (right border)
-                    non_zero_indices = np.where(col_mask)[0]
-
-                    if len(non_zero_indices) > 0:
-                        left_border = non_zero_indices[0]
-                        right_border = non_zero_indices[-1]
-                    else:
-                        # Fallback if detection fails
-                        left_border = 0
-                        right_border = frame.shape[1] - 1
-
-                    # Add a margin to ensure we don't crop too aggressively
-                    left_border = max(0, left_border - margin)
-                    right_border = min(frame.shape[1] - 1, right_border + margin)
-
-                    # Crop the frame to the detected content area
-                    cropped_frame = frame[:, left_border : right_border + 1, :]
-
-                    # Resize to the target dimensions
-                    resized_frame = cv2.resize(
-                        cropped_frame,
-                        (self.frame_width, self.frame_height),
-                        interpolation=cv2.INTER_LANCZOS4,
-                    )
-
-                    processed_frames.append(resized_frame)
-
-                # Stack frames back into a video
-                frames = np.stack(processed_frames)
-
-                # No augmentation for validation, just preprocess
-                frames = torch.stack([self.preprocess(frame) for frame in frames])
-                frames = frames.permute(1, 0, 2, 3)  # (C, T, H, W)
-
-                all_clips.append(frames)
-
-            # Stack all clips into a tensor of shape [num_clips, C, T, H, W]
-            frames_tensor = torch.stack(all_clips)
+        # Preprocess frames
+        frames = torch.stack([self.preprocess(frame) for frame in frames])
+        frames = frames.permute(1, 0, 2, 3)  # (C, T, H, W)
 
         # Create multi-hot encoded labels for each task
         labels = {
@@ -558,7 +464,7 @@ class MultiTaskVideoDataset(Dataset):
             "video_id": row["video_id"],
         }
 
-        return frames_tensor, labels
+        return frames, labels
 
     @staticmethod
     def calculate_video_mean_std(

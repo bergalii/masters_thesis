@@ -21,10 +21,7 @@ def setup_logging(experiment_name: str) -> logging.Logger:
 
     # Configure logging
     logging.basicConfig(
-        filename=str(log_file),
-        level=logging.INFO,
-        format="%(asctime)s - %(message)s",
-        datefmt="%m-%d %H:%M",
+        filename=str(log_file), level=logging.INFO, format="%(message)s"
     )
 
     return f"{experiment_name}_{timestamp}", logging.getLogger(experiment_name)
@@ -80,10 +77,28 @@ def print_and_get_mappings(dataset, logger: logging.Logger) -> Dict:
     return all_mappings
 
 
+def print_combined_mappings(train_dataset, val_dataset, logger: logging.Logger) -> Dict:
+    train_mappings = train_dataset.label_mappings
+    all_mappings = {}
+
+    for category in ["instrument", "verb", "target", "triplet"]:
+        train_counts = get_label_counts(train_dataset, category)
+        val_counts = get_label_counts(val_dataset, category)
+
+        logger.info(f"{category.upper()} LABELS:")
+        for label_id, label_name in sorted(train_mappings[category].items()):
+            train_count = train_counts.get(label_id, 0)
+            val_count = val_counts.get(label_id, 0)
+            logger.info(f"  {label_id}: {label_name} - {train_count}, {val_count}")
+
+        all_mappings[category] = train_mappings[category]
+
+    return all_mappings
+
+
 def resolve_nan(class_aps):
     equiv_nan = ["-0", "-0.", "-0.0", "-.0"]
     class_aps = list(map(str, class_aps))
     class_aps = [np.nan if x in equiv_nan else x for x in class_aps]
     class_aps = np.array(list(map(float, class_aps)))
     return class_aps
-

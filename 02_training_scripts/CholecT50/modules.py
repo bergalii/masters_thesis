@@ -13,161 +13,212 @@ from torchvision.ops.misc import Conv3dNormActivation
 from torchvision.utils import _log_api_usage_once
 
 
+class AttentionModule(nn.Module):
+    def __init__(
+        self,
+        feature_dims,
+        hidden_dim,
+        common_dim,
+        num_heads=4,
+        dropout=0.3,
+    ):
+        super().__init__()
+        self.common_dim = common_dim
+
+        # Project hidden features
+        self.hidden_projection = nn.ModuleDict(
+            {
+                task: nn.Sequential(
+                    nn.Linear(hidden_dim, common_dim),
+                    nn.LayerNorm(common_dim),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                )
+                for task in feature_dims
+            }
+        )
+
+        # Project logits
+        self.logit_projection = nn.ModuleDict(
+            {
+                task: nn.Sequential(
+                    nn.Linear(feature_dims[task], common_dim // 2),
+                    nn.LayerNorm(common_dim // 2),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                )
+                for task in feature_dims
+            }
+        )
+
+        # Cross-attention layers
+        self.cross_attention_layers = nn.ModuleDict(
+            {
+                "verb_inst": nn.MultiheadAttention(
+                    common_dim, num_heads, dropout=dropout, batch_first=True
+                ),
+                "verb_target": nn.MultiheadAttention(
+                    common_dim, num_heads, dropout=dropout, batch_first=True
+                ),
+                "inst_target": nn.MultiheadAttention(
+                    common_dim, num_heads, dropout=dropout, batch_first=True
+                ),
+            }
+        )
+
+        # Self-attention for each task
+        self.self_attention = nn.MultiheadAttention(
+            common_dim, num_heads, dropout=dropout, batch_first=True
+        )
+
+        # Layer norms for residual connections
+        self.norm1 = nn.ModuleDict(
+            {task: nn.LayerNorm(common_dim) for task in feature_dims}
+        )
+
+        self.norm2 = nn.ModuleDict(
+            {task: nn.LayerNorm(common_dim) for task in feature_dims}
+        )
+
+        # Gating mechanism to control information flow
+        self.gate = nn.ModuleDict(
+            {
+                task: nn.Sequential(nn.Linear(common_dim * 2, common_dim), nn.Sigmoid())
+                for task in feature_dims
+            }
+        )
+
+        # Final fusion layer with residual connection
+        self.fusion = nn.Sequential(
+            nn.Linear(3 * common_dim + 3 * (common_dim // 2), common_dim),
+            nn.LayerNorm(common_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(common_dim, common_dim),
+            nn.LayerNorm(common_dim),
+        )
+
+    def forward(
+        self,
+        verb_hidden,
+        verb_logits,
+        inst_hidden,
+        inst_logits,
+        target_hidden,
+        target_logits,
+    ):
+        # Process hidden features
+        verb_h = self.hidden_projection["verb"](verb_hidden)
+        inst_h = self.hidden_projection["instrument"](inst_hidden)
+        target_h = self.hidden_projection["target"](target_hidden)
+
+        # Process logits with sigmoid activation
+        verb_l = self.logit_projection["verb"](torch.sigmoid(verb_logits))
+        inst_l = self.logit_projection["instrument"](torch.sigmoid(inst_logits))
+        target_l = self.logit_projection["target"](torch.sigmoid(target_logits))
+
+        # Add positional encoding by unsqueezing to add sequence dimension
+        verb_emb = verb_h.unsqueeze(1)
+        inst_emb = inst_h.unsqueeze(1)
+        target_emb = target_h.unsqueeze(1)
+
+        # Self-attention for each embedding
+        verb_sa, _ = self.self_attention(verb_emb, verb_emb, verb_emb)
+        inst_sa, _ = self.self_attention(inst_emb, inst_emb, inst_emb)
+        target_sa, _ = self.self_attention(target_emb, target_emb, target_emb)
+
+        # Apply layer norm with residual connection
+        verb_emb = self.norm1["verb"](verb_emb + verb_sa)
+        inst_emb = self.norm1["instrument"](inst_emb + inst_sa)
+        target_emb = self.norm1["target"](target_emb + target_sa)
+
+        # Cross-attention between each pair (bidirectional)
+        # verb <-> instrument
+        v2i, _ = self.cross_attention_layers["verb_inst"](verb_emb, inst_emb, inst_emb)
+        i2v, _ = self.cross_attention_layers["verb_inst"](inst_emb, verb_emb, verb_emb)
+
+        # verb <-> target
+        v2t, _ = self.cross_attention_layers["verb_target"](
+            verb_emb, target_emb, target_emb
+        )
+        t2v, _ = self.cross_attention_layers["verb_target"](
+            target_emb, verb_emb, verb_emb
+        )
+
+        # instrument <-> target
+        i2t, _ = self.cross_attention_layers["inst_target"](
+            inst_emb, target_emb, target_emb
+        )
+        t2i, _ = self.cross_attention_layers["inst_target"](
+            target_emb, inst_emb, inst_emb
+        )
+
+        # Compute gates to control information flow from cross-attention
+        v_gate = self.gate["verb"](
+            torch.cat([verb_emb.squeeze(1), (v2i + v2t).squeeze(1) / 2], dim=1)
+        )
+        i_gate = self.gate["instrument"](
+            torch.cat([inst_emb.squeeze(1), (i2v + i2t).squeeze(1) / 2], dim=1)
+        )
+        t_gate = self.gate["target"](
+            torch.cat([target_emb.squeeze(1), (t2v + t2i).squeeze(1) / 2], dim=1)
+        )
+
+        # Apply gating and residual connection
+        verb_fused = verb_emb + v_gate.unsqueeze(1) * (v2i + v2t) / 2
+        inst_fused = inst_emb + i_gate.unsqueeze(1) * (i2v + i2t) / 2
+        target_fused = target_emb + t_gate.unsqueeze(1) * (t2v + t2i) / 2
+
+        # Apply second layer norm
+        verb_final = self.norm2["verb"](verb_fused)
+        inst_final = self.norm2["instrument"](inst_fused)
+        target_final = self.norm2["target"](target_fused)
+
+        # Concatenate all representations along with logit features
+        combined = torch.cat(
+            [
+                verb_final.squeeze(1),
+                inst_final.squeeze(1),
+                target_final.squeeze(1),
+                verb_l,
+                inst_l,
+                target_l,
+            ],
+            dim=1,
+        )
+
+        # Final fusion
+        return self.fusion(combined)
+
+
 # class AttentionModule(nn.Module):
-#     def __init__(
-#         self, feature_dims, common_dim, num_layers=2, num_heads=8, dropout=0.1
-#     ):
+#     def __init__(self, feature_dims, common_dim, num_layers=2, num_heads=4):
 #         super().__init__()
 #         self.common_dim = common_dim
-
-#         # Project each component's features to a common dimension
-#         self.component_projections = nn.ModuleDict(
-#             {
-#                 k: nn.Sequential(
-#                     nn.Linear(v, common_dim),
-#                     nn.LayerNorm(common_dim),
-#                     nn.Dropout(dropout),
-#                 )
-#                 for k, v in feature_dims.items()
-#             }
+#         self.component_embeddings = nn.ModuleDict(
+#             {k: nn.Linear(v, common_dim) for k, v in feature_dims.items()}
 #         )
 
-#         # Cross-attention layers between components
-#         self.cross_attention = nn.ModuleDict(
-#             {
-#                 # Each component attends to others
-#                 "verb_to_others": nn.MultiheadAttention(
-#                     common_dim, num_heads, dropout=dropout, batch_first=True
-#                 ),
-#                 "instrument_to_others": nn.MultiheadAttention(
-#                     common_dim, num_heads, dropout=dropout, batch_first=True
-#                 ),
-#                 "target_to_others": nn.MultiheadAttention(
-#                     common_dim, num_heads, dropout=dropout, batch_first=True
-#                 ),
-#             }
-#         )
-
-#         # Layer norms for pre and post attention
-#         self.pre_cross_norm = nn.ModuleDict(
-#             {k: nn.LayerNorm(common_dim) for k in feature_dims.keys()}
-#         )
-#         self.post_cross_norm = nn.ModuleDict(
-#             {k: nn.LayerNorm(common_dim) for k in feature_dims.keys()}
-#         )
-
-#         # Add a "global token" that can attend to all components
-#         self.global_token = nn.Parameter(torch.randn(1, 1, common_dim) * 0.02)
-
-#         # Create transformer encoder for sequence processing
 #         encoder_layer = nn.TransformerEncoderLayer(
-#             common_dim,
-#             num_heads,
-#             dim_feedforward=4 * common_dim,
-#             dropout=dropout,
-#             batch_first=True,
-#             norm_first=True,  # Pre-norm architecture for better training stability
+#             common_dim, num_heads, dim_feedforward=4 * common_dim, batch_first=True
 #         )
 #         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
 
-#         # Final output processing
-#         self.output_projection = nn.Sequential(
-#             nn.Linear(
-#                 4 * common_dim, 3 * common_dim
-#             ),  # 4 = 3 components + global token
-#             nn.LayerNorm(3 * common_dim),
-#             nn.GELU(),
-#             nn.Dropout(dropout),
-#         )
-
 #     def forward(self, verb_feat, inst_feat, target_feat):
-#         batch_size = verb_feat.size(0)
+#         # Project features to common space
+#         verb_emb = self.component_embeddings["verb"](verb_feat).unsqueeze(1)
+#         inst_emb = self.component_embeddings["instrument"](inst_feat).unsqueeze(1)
+#         target_emb = self.component_embeddings["target"](target_feat).unsqueeze(1)
 
-#         # Project inputs to common dimension
-#         verb_proj = self.component_projections["verb"](verb_feat)
-#         inst_proj = self.component_projections["instrument"](inst_feat)
-#         target_proj = self.component_projections["target"](target_feat)
+#         # Concatenate as sequence tokens
+#         tokens = torch.cat([verb_emb, inst_emb, target_emb], dim=1)
 
-#         # Reshape for attention - make sure they have a sequence dimension
-#         verb_seq = verb_proj.unsqueeze(1)  # [batch, 1, common_dim]
-#         inst_seq = inst_proj.unsqueeze(1)  # [batch, 1, common_dim]
-#         target_seq = target_proj.unsqueeze(1)  # [batch, 1, common_dim]
+#         # Process through transformer
+#         transformed = self.transformer(tokens)
 
-#         # Apply cross-attention with residual connections
-#         # Verb attends to instrument and target
-#         norm_verb = self.pre_cross_norm["verb"](verb_seq)
-#         kv_for_verb = torch.cat([inst_seq, target_seq], dim=1)
-#         verb_cross, _ = self.cross_attention["verb_to_others"](
-#             norm_verb, kv_for_verb, kv_for_verb
-#         )
-#         verb_cross = verb_seq + verb_cross  # Residual connection
-#         verb_cross = self.post_cross_norm["verb"](verb_cross)
-
-#         # Instrument attends to verb and target
-#         norm_inst = self.pre_cross_norm["instrument"](inst_seq)
-#         kv_for_inst = torch.cat([verb_seq, target_seq], dim=1)
-#         inst_cross, _ = self.cross_attention["instrument_to_others"](
-#             norm_inst, kv_for_inst, kv_for_inst
-#         )
-#         inst_cross = inst_seq + inst_cross  # Residual connection
-#         inst_cross = self.post_cross_norm["instrument"](inst_cross)
-
-#         # Target attends to verb and instrument
-#         norm_target = self.pre_cross_norm["target"](target_seq)
-#         kv_for_target = torch.cat([verb_seq, inst_seq], dim=1)
-#         target_cross, _ = self.cross_attention["target_to_others"](
-#             norm_target, kv_for_target, kv_for_target
-#         )
-#         target_cross = target_seq + target_cross  # Residual connection
-#         target_cross = self.post_cross_norm["target"](target_cross)
-
-#         # Expand global token to batch size
-#         global_token = self.global_token.expand(batch_size, -1, -1)
-
-#         # Concatenate all tokens (including global token) for transformer processing
-#         all_tokens = torch.cat(
-#             [global_token, verb_cross, inst_cross, target_cross],  # Global token first
-#             dim=1,
-#         )  # [batch, 4, common_dim]
-
-#         # Process through transformer encoder
-#         transformed = self.transformer(all_tokens)
-
-#         # Reshape and project to final output
+#         # Flatten the sequence dimension
 #         batch_size = transformed.size(0)
-#         flattened = transformed.reshape(batch_size, -1)
-
-#         return self.output_projection(flattened)
-
-
-class AttentionModule(nn.Module):
-    def __init__(self, feature_dims, common_dim, num_layers=2, num_heads=4):
-        super().__init__()
-        self.common_dim = common_dim
-        self.component_embeddings = nn.ModuleDict(
-            {k: nn.Linear(v, common_dim) for k, v in feature_dims.items()}
-        )
-
-        encoder_layer = nn.TransformerEncoderLayer(
-            common_dim, num_heads, dim_feedforward=4 * common_dim, batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
-
-    def forward(self, verb_feat, inst_feat, target_feat):
-        # Project features to common space
-        verb_emb = self.component_embeddings["verb"](verb_feat).unsqueeze(1)
-        inst_emb = self.component_embeddings["instrument"](inst_feat).unsqueeze(1)
-        target_emb = self.component_embeddings["target"](target_feat).unsqueeze(1)
-
-        # Concatenate as sequence tokens
-        tokens = torch.cat([verb_emb, inst_emb, target_emb], dim=1)
-
-        # Process through transformer
-        transformed = self.transformer(tokens)
-
-        # Flatten the sequence dimension
-        batch_size = transformed.size(0)
-        return transformed.reshape(batch_size, -1)
+#         return transformed.reshape(batch_size, -1)
 
 
 class MultiTaskHead(nn.Module):

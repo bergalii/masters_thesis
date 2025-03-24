@@ -1,8 +1,16 @@
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
-from trainer_multi import MultiTaskSelfDistillationTrainer
+
+# from trainer_multi import MultiTaskSelfDistillationTrainer
+from curriculum_trainer import MultiTaskSelfDistillationTrainer
 import torch
-from utils import setup_logging, set_seeds, print_and_get_mappings, load_configs
+from utils import (
+    setup_logging,
+    set_seeds,
+    print_and_get_mappings,
+    load_configs,
+    print_combined_mappings,
+)
 from pathlib import Path
 
 
@@ -53,10 +61,14 @@ def main():
         val_dataset, batch_size=configs["batch_size"], shuffle=False
     )
 
-    logger.info("-- Training Dataset Classes--")
-    mappings = print_and_get_mappings(train_dataset, logger)
-    logger.info("-- Validation Dataset Classes -- ")
-    print_and_get_mappings(val_dataset, logger)
+    # logger.info("-- Training Dataset Classes--")
+    # mappings = print_and_get_mappings(train_dataset, logger)
+    # logger.info("-- Validation Dataset Classes -- ")
+    # print_and_get_mappings(val_dataset, logger)
+    # logger.info("-" * 50)
+
+    logger.info("--Training and Validation Dataset Classes--")
+    mappings = print_combined_mappings(train_dataset, val_dataset, logger)
     logger.info("-" * 50)
 
     trainer = MultiTaskSelfDistillationTrainer(
@@ -73,6 +85,7 @@ def main():
         attention_module_common_dim=configs["attention_module_common_dim"],
         gradient_clipping=configs["gradient_clipping"],
         guidance_scale=configs["guidance_scale"],
+        consistency_loss_weight=configs["consistency_loss_weight"],
         device=DEVICE,
         logger=logger,
         dir_name=model_dir,

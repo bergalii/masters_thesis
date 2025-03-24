@@ -18,6 +18,8 @@ class ModelValidator:
         device: str,
         model_path: str,
         triplet_to_ivt: dict,
+        attention_module_common_dim: int,
+        hidden_layer_dim: int,
         guidance_scale: float,
     ):
         self.val_loader = val_loader
@@ -45,6 +47,8 @@ class ModelValidator:
             self.MT[target, t] = 1
 
         # self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
+        self.hidden_layer_dim = hidden_layer_dim
+        self.attention_module_common_dim = attention_module_common_dim
         self.feature_dims = {
             "verb": 512,
             "instrument": 512,
@@ -58,23 +62,31 @@ class ModelValidator:
         model = swin3d_s(weights=Swin3D_S_Weights.DEFAULT).to(self.device)
         in_features = model.num_features
         # Teacher heads
-        model.verb_head = MultiTaskHead(in_features, self.num_classes["verb"]).to(
-            self.device
-        )
-        model.instrument_head = MultiTaskHead(
-            in_features, self.num_classes["instrument"]
+        model.verb_head = MultiTaskHead(
+            in_features, self.num_classes["verb"], self.hidden_layer_dim
         ).to(self.device)
-        model.target_head = MultiTaskHead(in_features, self.num_classes["target"]).to(
-            self.device
-        )
+        model.instrument_head = MultiTaskHead(
+            in_features, self.num_classes["instrument"], self.hidden_layer_dim
+        ).to(self.device)
+        model.target_head = MultiTaskHead(
+            in_features, self.num_classes["target"], self.hidden_layer_dim
+        ).to(self.device)
 
-        model.attention_module = AttentionModule(self.feature_dims).to(self.device)
+        model.attention_module = AttentionModule(
+            self.feature_dims, self.attention_module_common_dim
+        ).to(self.device)
 
         # Teacher triplet head combines the ivt heads output features
         common_dim = model.attention_module.common_dim
-        total_input_size = in_features + 3 * common_dim
+        total_input_size = (
+            in_features
+            + 3 * common_dim
+            # + self.num_classes["verb"]
+            # + self.num_classes["instrument"]
+            # + self.num_classes["target"]
+        )
         model.triplet_head = MultiTaskHead(
-            total_input_size, self.num_classes["triplet"]
+            total_input_size, self.num_classes["triplet"], self.hidden_layer_dim
         ).to(self.device)
         model.head = nn.Identity()
 
@@ -85,24 +97,28 @@ class ModelValidator:
 
     def _forward_pass(self, inputs):
         """Perform forward pass through the model"""
-        features = self.model(inputs)
+        backbone_features = self.model(inputs)
         # Get individual component predictions
-        verb_logits = self.model.verb_head(features)
-        instrument_logits = self.model.instrument_head(features)
-        target_logits = self.model.target_head(features)
+        verb_logits, verb_hidden = self.model.verb_head(backbone_features)
+        instrument_logits, inst_hidden = self.model.instrument_head(backbone_features)
+        target_logits, target_hidden = self.model.target_head(backbone_features)
+
         # Apply attention module
         attention_output = self.model.attention_module(
-            verb_logits, instrument_logits, target_logits
+            verb_hidden, inst_hidden, target_hidden
         )
         # Combine all features for triplet prediction
         combined_features = torch.cat(
             [
-                features,  # original features from backbone
+                backbone_features,  # original features from backbone
                 attention_output,  # attention-fused features
+                # verb_logits,  # direct class predictions
+                # instrument_logits,
+                # target_logits,
             ],
             dim=1,
         )
-        triplet_logits = self.model.triplet_head(combined_features)
+        triplet_logits, _ = self.model.triplet_head(combined_features)
 
         return {
             "verb": verb_logits,
@@ -200,7 +216,7 @@ def main():
     CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
-    MODEL_PATH = r"04_models_dir/training_20250311_202110/best_model_teacher.pth"
+    MODEL_PATH = r"04_models_dir/training_20250318_004508/best_model_teacher.pth"
 
     torch.cuda.set_device(1)
     DEVICE = torch.device("cuda:1")
@@ -234,6 +250,8 @@ def main():
         model_path=MODEL_PATH,
         triplet_to_ivt=val_dataset.triplet_to_ivt,
         guidance_scale=configs["guidance_scale"],
+        hidden_layer_dim=configs["hidden_layer_dim"],
+        attention_module_common_dim=configs["attention_module_common_dim"],
     )
 
     # Run validation
