@@ -12,7 +12,7 @@ weight_decay: 0.001
 attention_module_common_dim: 256
 hidden_layer_dim: 512
 warmup_epochs: 5
-consistency_loss_weight: 0.5
+consistency_loss_weight: 0.7
 temperature: 2.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 

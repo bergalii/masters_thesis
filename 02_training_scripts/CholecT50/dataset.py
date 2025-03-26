@@ -469,10 +469,13 @@ class MultiTaskVideoDataset(Dataset):
                     # Calculate frame indices based on percentage
                     start_idx = int(total_frames * start_percent)
                     end_idx = int(total_frames * end_percent)
+                    # Clamp indices to valid range
+                    end_idx = min(end_idx, total_frames - 1)
+                    start_idx = max(start_idx, 0)
 
                     # Ensure we have enough frames
                     if end_idx - start_idx < self.clip_length:
-                        # Fall back to centered sampling in this segment
+                        # If not, fall back to centered sampling in this segment
                         mid_point = (start_idx + end_idx) // 2
                         half_length = self.clip_length // 2
                         start_idx = max(0, mid_point - half_length)

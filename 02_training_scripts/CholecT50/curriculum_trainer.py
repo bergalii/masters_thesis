@@ -359,7 +359,7 @@ class MultiTaskSelfDistillationTrainer:
             # Normalize weights relative to each other, while keeping their average at 0.5
             self.task_weights[task] = (
                 (1.0 / (validation_metrics[task] + 0.1)) / total_inverse
-            ) * 1.0
+            ) * 0.5
 
         # Keep triplet weight fixed at 1.5
         self.task_weights["triplet"] = 1.5
@@ -641,7 +641,7 @@ class MultiTaskSelfDistillationTrainer:
         for param in self.teacher_model.attention_module.parameters():
             param.requires_grad = False
 
-        # self._train_model_components(self.teacher_model, self.teacher_optimizer)
+        self._train_model_components(self.teacher_model, self.teacher_optimizer)
 
         # Phase 2: Freeze component heads and train only triplet task
         self.logger.info("Phase 2: Training the whole teacher model...")
