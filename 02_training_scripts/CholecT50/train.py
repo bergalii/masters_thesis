@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader
 
 # from trainer_multi import MultiTaskSelfDistillationTrainer
 from curriculum_trainer import MultiTaskSelfDistillationTrainer
+from simple_trainer import SimplifiedTrainer
 import torch
 from utils import (
     setup_logging,
@@ -71,23 +72,38 @@ def main():
     mappings = print_combined_mappings(train_dataset, val_dataset, logger)
     logger.info("-" * 50)
 
-    trainer = MultiTaskSelfDistillationTrainer(
+    # trainer = MultiTaskSelfDistillationTrainer(
+    #     num_epochs=configs["num_epochs"],
+    #     train_loader=train_loader,
+    #     val_loader=val_loader,
+    #     label_mappings=mappings,
+    #     num_classes=train_dataset.num_classes,
+    #     triplet_to_ivt=train_dataset.triplet_to_ivt,
+    #     warmup_epochs=configs["warmup_epochs"],
+    #     learning_rate=configs["learning_rate"],
+    #     weight_decay=configs["weight_decay"],
+    #     hidden_layer_dim=configs["hidden_layer_dim"],
+    #     attention_module_common_dim=configs["attention_module_common_dim"],
+    #     gradient_clipping=configs["gradient_clipping"],
+    #     guidance_scale=configs["guidance_scale"],
+    #     consistency_loss_weight=configs["consistency_loss_weight"],
+    #     device=DEVICE,
+    #     logger=logger,
+    #     dir_name=model_dir,
+    # )
+
+    trainer = SimplifiedTrainer(
         num_epochs=configs["num_epochs"],
         train_loader=train_loader,
         val_loader=val_loader,
         label_mappings=mappings,
         num_classes=train_dataset.num_classes,
-        triplet_to_ivt=train_dataset.triplet_to_ivt,
-        warmup_epochs=configs["warmup_epochs"],
+        device=DEVICE,
+        logger=logger,
         learning_rate=configs["learning_rate"],
         weight_decay=configs["weight_decay"],
         hidden_layer_dim=configs["hidden_layer_dim"],
-        attention_module_common_dim=configs["attention_module_common_dim"],
         gradient_clipping=configs["gradient_clipping"],
-        guidance_scale=configs["guidance_scale"],
-        consistency_loss_weight=configs["consistency_loss_weight"],
-        device=DEVICE,
-        logger=logger,
         dir_name=model_dir,
     )
 

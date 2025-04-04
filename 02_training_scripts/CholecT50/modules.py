@@ -191,6 +191,28 @@ class AttentionModule(nn.Module):
         return self.fusion(combined)
 
 
+class MultiTaskHead(nn.Module):
+    def __init__(self, in_features: int, num_classes: int, hidden_layer_dim: int):
+        super().__init__()
+        # Extract hidden features for attention
+        self.hidden = nn.Sequential(
+            nn.LayerNorm(in_features),
+            nn.Dropout(p=0.5),
+            nn.Linear(in_features, hidden_layer_dim),
+            nn.GELU(),
+        )
+        # Classification layer
+        self.classifier = nn.Sequential(
+            nn.Dropout(p=0.3),
+            nn.Linear(hidden_layer_dim, num_classes),
+        )
+
+    def forward(self, x):
+        hidden_features = self.hidden(x)
+        logits = self.classifier(hidden_features)
+        return logits, hidden_features
+
+
 # class AttentionModule(nn.Module):
 #     def __init__(self, feature_dims, common_dim, num_layers=2, num_heads=4):
 #         super().__init__()
@@ -219,28 +241,6 @@ class AttentionModule(nn.Module):
 #         # Flatten the sequence dimension
 #         batch_size = transformed.size(0)
 #         return transformed.reshape(batch_size, -1)
-
-
-class MultiTaskHead(nn.Module):
-    def __init__(self, in_features: int, num_classes: int, hidden_layer_dim: int):
-        super().__init__()
-        # Extract hidden features for attention
-        self.hidden = nn.Sequential(
-            nn.LayerNorm(in_features),
-            nn.Dropout(p=0.5),
-            nn.Linear(in_features, hidden_layer_dim),
-            nn.GELU(),
-        )
-        # Classification layer
-        self.classifier = nn.Sequential(
-            nn.Dropout(p=0.3),
-            nn.Linear(hidden_layer_dim, num_classes),
-        )
-
-    def forward(self, x):
-        hidden_features = self.hidden(x)
-        logits = self.classifier(hidden_features)
-        return logits, hidden_features
 
 
 ###################### FPN Implementation #############################
