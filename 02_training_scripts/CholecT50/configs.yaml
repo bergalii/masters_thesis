@@ -16,5 +16,5 @@ consistency_loss_weight: 0.5
 temperature: 2.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 
-guidance_scale: 1.0 
+guidance_scale: 0.0
 fpn_out_channels: 256

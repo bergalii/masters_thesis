@@ -195,14 +195,14 @@ class MultiTaskSelfDistillationTrainer:
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
             max_lr=[
-                self.learning_rate / 10,
-                self.learning_rate / 10,
-                self.learning_rate,
-                self.learning_rate,
+                self.learning_rate / 10,  # For backbone with decay
+                self.learning_rate / 10,  # For backbone without decay
+                self.learning_rate,  # For heads with decay
+                self.learning_rate,  # For heads without decay
             ],
             total_steps=len(self.train_loader) * int(self.num_epochs * 0.7),
             pct_start=0.1,  # 10% of training time is warmup
-            anneal_strategy="cos",
+            anneal_strategy="cos",  # Cosine annealing
             div_factor=5.0,  # initial_lr = max_lr / div_factor
             final_div_factor=10.0,  # final_lr = initial_lr / final_div_factor
         )
@@ -499,7 +499,7 @@ class MultiTaskSelfDistillationTrainer:
                 avg_loss = epoch_losses[task] / len(self.train_loader)
                 self.logger.info(f"{task.capitalize()} - Loss: {avg_loss:.4f}")
 
-    def _validate_model(self, model, mode):
+    def _validate_model(self, model):
         """Validate model and compute metrics for all tasks"""
 
         model.eval()
@@ -631,12 +631,12 @@ class MultiTaskSelfDistillationTrainer:
         # Phase 1: Train component tasks only
         self.logger.info("Phase 1: Training component tasks...")
 
-        # Freeze the triplet head parameters to prevent updates
-        for param in self.teacher_model.triplet_head.parameters():
-            param.requires_grad = False
+        # # Freeze the triplet head parameters to prevent updates
+        # for param in self.teacher_model.triplet_head.parameters():
+        #     param.requires_grad = False
 
-        for param in self.teacher_model.attention_module.parameters():
-            param.requires_grad = False
+        # for param in self.teacher_model.attention_module.parameters():
+        #     param.requires_grad = False
 
         # self._train_model_components(self.teacher_model, self.teacher_optimizer)
 
@@ -681,7 +681,7 @@ class MultiTaskSelfDistillationTrainer:
         for param in self.student_model.attention_module.parameters():
             param.requires_grad = False
 
-        # self._train_model_components(self.student_model, self.student_optimizer)
+        self._train_model_components(self.student_model, self.student_optimizer)
 
         # Unfreeze triplet head
         for param in self.student_model.triplet_head.parameters():

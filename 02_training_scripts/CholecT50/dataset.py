@@ -48,7 +48,7 @@ class MultiTaskVideoDataset(Dataset):
         if cross_val_fold is not None:
             split_indices = self._create_cross_val_split(cross_val_fold)
         else:
-            # Otherwise use the stratified split
+            # Otherwise use the stratified splits
             split_indices = self._create_stratified_split(train_ratio)
 
         self.annotations = self.annotations.iloc[split_indices].reset_index(drop=True)
@@ -184,7 +184,7 @@ class MultiTaskVideoDataset(Dataset):
                     self.label_mappings["triplet"][actual_triplet_id] = triplet
 
         # Determine the number of classes for each category
-        # For triplets, use the continuous indices (should be 69)
+        # For triplets, use the continuous indices
         # For other categories, get the max ID
         inst_ids = set()
         verb_ids = set()
@@ -199,7 +199,7 @@ class MultiTaskVideoDataset(Dataset):
             "instrument": max(inst_ids) + 1,
             "verb": max(verb_ids) + 1,
             "target": max(target_ids) + 1,
-            "triplet": len(self.triplet_to_index),  # Should be 69
+            "triplet": len(self.triplet_to_index),
         }
 
         # Create reverse mapping from continuous index to original triplet ID

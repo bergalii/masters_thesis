@@ -45,22 +45,19 @@ class ModelValidator:
             self.MI[inst, t] = 1
             self.MV[verb, t] = 1
             self.MT[target, t] = 1
-
-        # self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
         self.hidden_layer_dim = hidden_layer_dim
         self.attention_module_common_dim = attention_module_common_dim
-        self.feature_dims = {
-            "verb": 512,
-            "instrument": 512,
-            "target": 512,
-        }
+        self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
         # Initialize and load the model
         self.model = self._initialize_model()
 
     def _initialize_model(self):
         """Initialize the model architecture and load the saved weights"""
         model = swin3d_s(weights=Swin3D_S_Weights.DEFAULT).to(self.device)
+        # We need to remove the original classification head
+        model.head = nn.Identity()
         in_features = model.num_features
+
         # Teacher heads
         model.verb_head = MultiTaskHead(
             in_features, self.num_classes["verb"], self.hidden_layer_dim
@@ -73,22 +70,22 @@ class ModelValidator:
         ).to(self.device)
 
         model.attention_module = AttentionModule(
-            self.feature_dims, self.attention_module_common_dim
+            self.feature_dims,
+            self.hidden_layer_dim,
+            self.attention_module_common_dim,
+            num_heads=4,
+            dropout=0.3,
         ).to(self.device)
 
-        # Teacher triplet head combines the ivt heads output features
-        common_dim = model.attention_module.common_dim
         total_input_size = (
-            in_features
-            + 3 * common_dim
-            # + self.num_classes["verb"]
-            # + self.num_classes["instrument"]
-            # + self.num_classes["target"]
+            in_features  # Backbone features
+            + self.attention_module_common_dim  # Attention module output
+            + sum(self.feature_dims.values())  # Probability outputs from each tas
         )
+
         model.triplet_head = MultiTaskHead(
             total_input_size, self.num_classes["triplet"], self.hidden_layer_dim
         ).to(self.device)
-        model.head = nn.Identity()
 
         # Load the saved weights
         print(f"Loading model from {self.model_path}")
@@ -96,28 +93,34 @@ class ModelValidator:
         return model
 
     def _forward_pass(self, inputs):
-        """Perform forward pass through the model"""
+        """Perform forward pass through the model based on the model type [teacher, student]"""
         backbone_features = self.model(inputs)
         # Get individual component predictions
         verb_logits, verb_hidden = self.model.verb_head(backbone_features)
         instrument_logits, inst_hidden = self.model.instrument_head(backbone_features)
         target_logits, target_hidden = self.model.target_head(backbone_features)
 
-        # Apply attention module
         attention_output = self.model.attention_module(
-            verb_hidden, inst_hidden, target_hidden
+            verb_hidden,
+            verb_logits,
+            inst_hidden,
+            instrument_logits,
+            target_hidden,
+            target_logits,
         )
+
         # Combine all features for triplet prediction
         combined_features = torch.cat(
             [
                 backbone_features,  # original features from backbone
                 attention_output,  # attention-fused features
-                # verb_logits,  # direct class predictions
-                # instrument_logits,
-                # target_logits,
+                torch.sigmoid(verb_logits),  # Probability predictions
+                torch.sigmoid(instrument_logits),
+                torch.sigmoid(target_logits),
             ],
             dim=1,
         )
+
         triplet_logits, _ = self.model.triplet_head(combined_features)
 
         return {
@@ -131,36 +134,51 @@ class ModelValidator:
         """Validate the model and compute metrics"""
         self.model.eval()
 
-        # Get all unique video IDs
-        video_ids = list(set([item["video_id"] for _, item in self.val_dataset]))
-
         # Initialize recognition object
         recognize = Recognition(num_class=self.num_classes["triplet"])
-        recognize.reset_global()
-
-        # Group samples by video_id
-        video_samples = defaultdict(list)
-        for i in range(len(self.val_dataset)):
-            _, labels = self.val_dataset[i]
-            video_id = labels["video_id"]
-            video_samples[video_id].append(i)
+        # recognize.reset_global()
+        recognize.reset()
 
         with torch.no_grad():
-            # Process each video separately
-            for video_id in video_ids:
-                # Process all clips from this video
-                for idx in video_samples[video_id]:
-                    inputs, batch_labels = self.val_dataset[idx]
-                    # Add batch dimension
-                    inputs = inputs.unsqueeze(0).to(self.device)
+            for inputs_batch, batch_labels in self.val_loader:
+                # inputs have dimension [B, N, C, T, H, W]
+                batch_size = inputs_batch.shape[0]
+                num_clips = inputs_batch.shape[1]
+                # Process each video in the batch
+                for b in range(batch_size):
+                    video_outputs = {
+                        task: [] for task in ["verb", "instrument", "target", "triplet"]
+                    }
+                    # Process each clip individually
+                    for c in range(num_clips):
+                        # Extract single clip: [C, T, H, W]
+                        clip = (
+                            inputs_batch[b, c].unsqueeze(0).to(self.device)
+                        )  # Add batch dimension
 
-                    model_outputs = self._forward_pass(inputs)
-                    # Convert all outputs to probabilities at once
+                        # Get the predictions for this clip
+                        clip_outputs = self._forward_pass(clip)
+
+                        # Store predictions for each task
+                        for task, outputs in clip_outputs.items():
+                            video_outputs[task].append(outputs)
+
+                    # Average predictions across clips for each task
+                    task_logits = {}
+                    for task, outputs_list in video_outputs.items():
+                        # Concatenate along batch dimension then average
+                        outputs_tensor = torch.cat([o for o in outputs_list], dim=0)
+                        task_logits[task] = torch.mean(
+                            outputs_tensor, dim=0, keepdim=True
+                        )
+
+                    # Convert all task logits to probabilities
                     task_probabilities = {
-                        task: torch.sigmoid(outputs)
-                        for task, outputs in model_outputs.items()
+                        task: torch.sigmoid(logits)
+                        for task, logits in task_logits.items()
                     }
 
+                    # Get guidance from individual tasks
                     guidance_inst = torch.matmul(
                         task_probabilities["instrument"], self.MI
                     )
@@ -169,21 +187,25 @@ class ModelValidator:
                         task_probabilities["target"], self.MT
                     )
 
-                    # Combine guidance signals
+                    # Combine guidance outputs
                     guidance = guidance_inst * guidance_verb * guidance_target
 
                     # Apply guidance with a scale factor
-                    guided_probs = (1 - self.guidance_scale) * task_probabilities[
-                        "triplet"
-                    ] + self.guidance_scale * (guidance * task_probabilities["triplet"])
+                    guided_triplet_probs = (
+                        1 - self.guidance_scale
+                    ) * task_probabilities["triplet"] + self.guidance_scale * (
+                        guidance * task_probabilities["triplet"]
+                    )
 
-                    predictions = guided_probs.cpu().numpy()
-                    true_labels = batch_labels["triplet"].unsqueeze(0).cpu().numpy()
-                    recognize.update(true_labels, predictions)
+                    # Update with triplet predictions and the label for the video
+                    predictions = guided_triplet_probs.cpu().numpy()
+                    labels = batch_labels["triplet"][b].unsqueeze(0).cpu().numpy()
 
-                # Signal end of video to the Recognition evaluator
-                recognize.video_end()
+                    # Update the recognizer with the current video
+                    recognize.update(labels, predictions)
 
+                    # Signal end of video to the Recognition evaluator
+                    recognize.video_end()
         # Compute video-level AP metrics
         results = {
             "triplet": recognize.compute_video_AP("ivt"),
@@ -204,6 +226,12 @@ class ModelValidator:
             "instrument": recognize.compute_global_AP("i"),
             "target": recognize.compute_global_AP("t"),
         }
+        global_results = {
+            "triplet": recognize.compute_AP("ivt"),
+            "verb": recognize.compute_AP("v"),
+            "instrument": recognize.compute_AP("i"),
+            "target": recognize.compute_AP("t"),
+        }
 
         print("-" * 50)
         print("\nGlobal Validation Results (for comparison):")
@@ -216,7 +244,7 @@ def main():
     CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
-    MODEL_PATH = r"04_models_dir/training_20250318_004508/best_model_teacher.pth"
+    MODEL_PATH = r"04_models_dir/training_20250329_134707/best_model_teacher.pth"
 
     torch.cuda.set_device(1)
     DEVICE = torch.device("cuda:1")
@@ -253,7 +281,6 @@ def main():
         hidden_layer_dim=configs["hidden_layer_dim"],
         attention_module_common_dim=configs["attention_module_common_dim"],
     )
-
     # Run validation
     validator.validate()
 
