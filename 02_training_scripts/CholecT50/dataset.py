@@ -70,37 +70,37 @@ class MultiTaskVideoDataset(Dataset):
                 # Color adjustments
                 A.OneOf(
                     [
-                        A.RandomGamma(gamma_limit=(80, 120), p=0.4),
+                        A.RandomGamma(
+                            gamma_limit=(70, 130), p=0.4
+                        ),  # Wider gamma range
                         A.RandomBrightnessContrast(
-                            brightness_limit=(-0.2, 0.2),
-                            contrast_limit=(-0.2, 0.2),
+                            brightness_limit=(-0.25, 0.25),
+                            contrast_limit=(-0.25, 0.25),
                             p=0.4,
                         ),
                         A.HueSaturationValue(
-                            hue_shift_limit=15,
-                            sat_shift_limit=15,
-                            val_shift_limit=15,
+                            hue_shift_limit=20,
+                            sat_shift_limit=25,
+                            val_shift_limit=20,
                             p=0.3,
                         ),
                     ],
-                    p=0.6,
+                    p=0.7,
                 ),
                 # Flips
                 A.OneOf([A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5)]),
                 # Detail enhancement
-                A.CLAHE(clip_limit=(1, 1.3), tile_grid_size=(6, 6), p=0.3),
+                A.CLAHE(clip_limit=(1, 1.5), tile_grid_size=(6, 6), p=0.3),
                 # Blurs to simulate focus variations
                 A.OneOf(
                     [
-                        A.AdvancedBlur(
-                            blur_limit=(3, 5), p=0.3
-                        ),  # Reduced blur strength
+                        A.AdvancedBlur(blur_limit=(3, 5), p=0.3),
                         A.GaussianBlur(blur_limit=(3, 5), p=0.3),
                     ],
                     p=0.2,
                 ),
-                # Noise
-                A.GaussNoise(std_range=(0.1, 0.2), p=0.3),
+                # Reduced noise
+                A.GaussNoise(std_range=(0.05, 0.15), p=0.2),
             ]
         )
 
@@ -291,24 +291,14 @@ class MultiTaskVideoDataset(Dataset):
         else:
             return val_indices
 
-    def _balance_dataset(self, min_occurrences, target_multiplier=2.0):
-        """Balance the dataset with emphasis on target representation
+    def _balance_dataset(self, min_occurrences):
+        """Oversample clips containing underrepresented triplets"""
 
-        Args:
-            min_occurrences: Minimum occurrences for triplets
-            target_multiplier: Factor to increase sampling of rare target classes
-        """
-        # Count current triplet occurrences (unchanged)
         triplet_counts = defaultdict(int)
+        # Count current triplet occurrences
         for _, row in self.annotations.iterrows():
             for triplet in ast.literal_eval(row["triplet_label"]):
                 triplet_counts[triplet] += 1
-
-        # Count target occurrences
-        target_counts = defaultdict(int)
-        for _, row in self.annotations.iterrows():
-            for target in ast.literal_eval(row["target_label"]):
-                target_counts[target] += 1
 
         # Identify triplets needing more samples
         needed_triplets = {
@@ -316,90 +306,29 @@ class MultiTaskVideoDataset(Dataset):
             for triplet, count in triplet_counts.items()
         }
 
-        # Calculate target importance weights
-        max_target_count = max(target_counts.values())
-        target_importance = {
-            target: max(1.0, (max_target_count / (count + 1)) * target_multiplier)
-            for target, count in target_counts.items()
-        }
-
-        # Collect indices of clips containing each triplet and their target information
+        # Collect indices of clips containing each triplet
         triplet_clips = defaultdict(list)
         for idx, row in self.annotations.iterrows():
-            triplet_labels = ast.literal_eval(row["triplet_label"])
-            target_labels = ast.literal_eval(row["target_label"])
-
-            for i, triplet in enumerate(triplet_labels):
+            for triplet in ast.literal_eval(row["triplet_label"]):
                 if needed_triplets.get(triplet, 0) > 0:
-                    # Store (index, target_importance) pair
-                    target = (
-                        target_labels[i] if i < len(target_labels) else target_labels[0]
-                    )
-                    importance = target_importance[target]
-                    triplet_clips[triplet].append((idx, importance))
+                    triplet_clips[triplet].append(idx)
 
-        # Oversample clips with weighted sampling
+        # Oversample clips
         new_samples = []
         for triplet, needed in needed_triplets.items():
             if needed == 0 or triplet not in triplet_clips:
                 continue
 
-            clips_with_importance = triplet_clips[triplet]
-            indices = [idx for idx, _ in clips_with_importance]
-            weights = [importance for _, importance in clips_with_importance]
+            clips = triplet_clips[triplet]
 
-            # Normalize weights
-            if weights:
-                weights = [w / sum(weights) for w in weights]
+            # Add extra samples
+            new_samples.extend(random.choices(clips, k=needed))
 
-                # Sample with replacement, using weights to favor rare targets
-                sampled_indices = random.choices(indices, weights=weights, k=needed)
-                new_samples.extend(sampled_indices)
-
-        # Add new samples to annotations (unchanged)
+        # Add new samples to annotations
         if new_samples:
             new_df = self.annotations.iloc[new_samples]
             self.annotations = pd.concat([self.annotations, new_df], ignore_index=True)
             self.annotations = self.annotations.sample(frac=1).reset_index(drop=True)
-
-    # def _balance_dataset(self, min_occurrences):
-    #     """Oversample clips containing underrepresented triplets"""
-
-    #     triplet_counts = defaultdict(int)
-    #     # Count current triplet occurrences
-    #     for _, row in self.annotations.iterrows():
-    #         for triplet in ast.literal_eval(row["triplet_label"]):
-    #             triplet_counts[triplet] += 1
-
-    #     # Identify triplets needing more samples
-    #     needed_triplets = {
-    #         triplet: max(min_occurrences - count, 0)
-    #         for triplet, count in triplet_counts.items()
-    #     }
-
-    #     # Collect indices of clips containing each triplet
-    #     triplet_clips = defaultdict(list)
-    #     for idx, row in self.annotations.iterrows():
-    #         for triplet in ast.literal_eval(row["triplet_label"]):
-    #             if needed_triplets.get(triplet, 0) > 0:
-    #                 triplet_clips[triplet].append(idx)
-
-    #     # Oversample clips
-    #     new_samples = []
-    #     for triplet, needed in needed_triplets.items():
-    #         if needed == 0 or triplet not in triplet_clips:
-    #             continue
-
-    #         clips = triplet_clips[triplet]
-
-    #         # Add extra samples
-    #         new_samples.extend(random.choices(clips, k=needed))
-
-    #     # Add new samples to annotations
-    #     if new_samples:
-    #         new_df = self.annotations.iloc[new_samples]
-    #         self.annotations = pd.concat([self.annotations, new_df], ignore_index=True)
-    #         self.annotations = self.annotations.sample(frac=1).reset_index(drop=True)
 
     def _create_multi_hot(self, label_ids: List[int], category: str) -> torch.Tensor:
         """

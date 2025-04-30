@@ -205,27 +205,21 @@ class ModelValidator:
                     recognize.update(labels, predictions)
 
                     # Signal end of video to the Recognition evaluator
-                    recognize.video_end()
+                    # recognize.video_end()
         # Compute video-level AP metrics
-        results = {
-            "triplet": recognize.compute_video_AP("ivt"),
-            "verb": recognize.compute_video_AP("v"),
-            "instrument": recognize.compute_video_AP("i"),
-            "target": recognize.compute_video_AP("t"),
-        }
+        # results = {
+        #     "triplet": recognize.compute_video_AP("ivt"),
+        #     "verb": recognize.compute_video_AP("v"),
+        #     "instrument": recognize.compute_video_AP("i"),
+        #     "target": recognize.compute_video_AP("t"),
+        # }
 
-        print("\nVideo-level Validation Results:")
-        for task in ["verb", "instrument", "target", "triplet"]:
-            print(f"{task.capitalize()} Results:")
-            print(f"Video-level mAP: {results[task]['mAP']:.4f}")
-            print(f"Video-level AP: {results[task]['AP']}")
+        # print("\nVideo-level Validation Results:")
+        # for task in ["verb", "instrument", "target", "triplet"]:
+        #     print(f"{task.capitalize()} Results:")
+        #     print(f"Video-level mAP: {results[task]['mAP']:.4f}")
+        #     print(f"Video-level AP: {results[task]['AP']}")
 
-        global_results = {
-            "triplet": recognize.compute_global_AP("ivt"),
-            "verb": recognize.compute_global_AP("v"),
-            "instrument": recognize.compute_global_AP("i"),
-            "target": recognize.compute_global_AP("t"),
-        }
         global_results = {
             "triplet": recognize.compute_AP("ivt"),
             "verb": recognize.compute_AP("v"),
@@ -244,7 +238,7 @@ def main():
     CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
-    MODEL_PATH = r"04_models_dir/training_20250329_134707/best_model_teacher.pth"
+    MODEL_PATH = r"04_models_dir/training_20250428_094504/best_model_student.pth"
 
     torch.cuda.set_device(1)
     DEVICE = torch.device("cuda:1")

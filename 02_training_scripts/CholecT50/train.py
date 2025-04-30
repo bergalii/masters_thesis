@@ -1,14 +1,10 @@
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
-
-# from trainer_multi import MultiTaskSelfDistillationTrainer
 from curriculum_trainer import MultiTaskSelfDistillationTrainer
-from simple_trainer import SimplifiedTrainer
 import torch
 from utils import (
     setup_logging,
     set_seeds,
-    print_and_get_mappings,
     load_configs,
     print_combined_mappings,
 )
@@ -62,12 +58,6 @@ def main():
         val_dataset, batch_size=configs["batch_size"], shuffle=False
     )
 
-    # logger.info("-- Training Dataset Classes--")
-    # mappings = print_and_get_mappings(train_dataset, logger)
-    # logger.info("-- Validation Dataset Classes -- ")
-    # print_and_get_mappings(val_dataset, logger)
-    # logger.info("-" * 50)
-
     logger.info("--Training and Validation Dataset Classes--")
     mappings = print_combined_mappings(train_dataset, val_dataset, logger)
     logger.info("-" * 50)
@@ -91,21 +81,6 @@ def main():
         logger=logger,
         dir_name=model_dir,
     )
-
-    # trainer = SimplifiedTrainer(
-    #     num_epochs=configs["num_epochs"],
-    #     train_loader=train_loader,
-    #     val_loader=val_loader,
-    #     label_mappings=mappings,
-    #     num_classes=train_dataset.num_classes,
-    #     device=DEVICE,
-    #     logger=logger,
-    #     learning_rate=configs["learning_rate"],
-    #     weight_decay=configs["weight_decay"],
-    #     hidden_layer_dim=configs["hidden_layer_dim"],
-    #     gradient_clipping=configs["gradient_clipping"],
-    #     dir_name=model_dir,
-    # )
 
     trainer.train()
 
