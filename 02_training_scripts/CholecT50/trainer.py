@@ -1,6 +1,5 @@
 import torch
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
 import torch.nn as nn
 import logging
@@ -616,10 +615,53 @@ class MultiTaskSelfDistillationTrainer:
 
         return {task: metrics["mAP"] for task, metrics in task_metrics.items()}
 
-    def train(self):
+    def train(self, train_components=False):
+        """
+        Execute training with curriculum learning approach
+
+        Args:
+            train_components: Boolean flag to enable/disable component training phase
+        """
+
+        self.logger.info("Training teacher model...")
+        total_trainable_params = sum(
+            p.numel() for p in self.teacher_model.parameters() if p.requires_grad
+        )
+        self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
+        self.logger.info("-" * 50)
+
+        if train_components:
+            # Phase 1: Train component tasks only
+            self.logger.info("Training component tasks for the teacher model...")
+
+            # Freeze the triplet head parameters to prevent updates
+            for param in self.teacher_model.triplet_head.parameters():
+                param.requires_grad = False
+
+            for param in self.teacher_model.attention_module.parameters():
+                param.requires_grad = False
+
+            self._train_model_components(self.teacher_model, self.teacher_optimizer)
+
+            # Unfreeze triplet head and attention module after component training
+            for param in self.teacher_model.triplet_head.parameters():
+                param.requires_grad = True
+
+            for param in self.teacher_model.attention_module.parameters():
+                param.requires_grad = True
+
+        # Phase 2: Train the whole teacher model
+        self._train_model(
+            self.teacher_model,
+            self.teacher_optimizer,
+            self.teacher_scheduler,
+            "teacher",
+        )
+
         # After teacher training completes, load the best teacher model for distillation
-        best_teacher_path = (
-            f"04_models_dir/training_20250329_134707/best_model_teacher.pth"
+        best_teacher_path = f"{self.dir_name}/best_model_teacher.pth"
+        self.logger.info(
+            f"Loading best teacher model from {best_teacher_path} for distillation..."
         )
         # Load the best teacher model weights
         teacher_state_dict = torch.load(best_teacher_path)
@@ -628,90 +670,32 @@ class MultiTaskSelfDistillationTrainer:
 
         # Train the student model
         self.logger.info("Training the student model...")
+        trainable_params_student = sum(
+            p.numel() for p in self.student_model.parameters() if p.requires_grad
+        )
+        self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
 
+        if train_components:
+            # Freeze the triplet head parameters to prevent updates
+            for param in self.student_model.triplet_head.parameters():
+                param.requires_grad = False
+
+            for param in self.student_model.attention_module.parameters():
+                param.requires_grad = False
+
+            self._train_model_components(self.student_model, self.student_optimizer)
+
+            # Unfreeze triplet head and attention module after component training
+            for param in self.student_model.triplet_head.parameters():
+                param.requires_grad = True
+
+            for param in self.student_model.attention_module.parameters():
+                param.requires_grad = True
+
+        # Train the full student model
         self._train_model(
             self.student_model,
             self.student_optimizer,
             self.student_scheduler,
             "student",
         )
-
-    # def train(self):
-    #     """Execute training with curriculum learning approach"""
-
-    #     self.logger.info("Training teacher model...")
-    #     total_trainable_params = sum(
-    #         p.numel() for p in self.teacher_model.parameters() if p.requires_grad
-    #     )
-    #     self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
-    #     self.logger.info("-" * 50)
-
-    #     # Phase 1: Train component tasks only
-    #     self.logger.info("Phase 1: Training component tasks...")
-
-    #     # # Freeze the triplet head parameters to prevent updates
-    #     # for param in self.teacher_model.triplet_head.parameters():
-    #     #     param.requires_grad = False
-
-    #     # for param in self.teacher_model.attention_module.parameters():
-    #     #     param.requires_grad = False
-
-    #     # self._train_model_components(self.teacher_model, self.teacher_optimizer)
-
-    #     # Phase 2: Freeze component heads and train only triplet task
-    #     self.logger.info("Phase 2: Training the whole teacher model...")
-
-    #     # Unfreeze triplet head
-    #     for param in self.teacher_model.triplet_head.parameters():
-    #         param.requires_grad = True
-
-    #     # Unfreeze attention module
-    #     for param in self.teacher_model.attention_module.parameters():
-    #         param.requires_grad = True
-
-    #     self._train_model(
-    #         self.teacher_model,
-    #         self.teacher_optimizer,
-    #         self.teacher_scheduler,
-    #         "teacher",
-    #     )
-
-    #     # After teacher training completes, load the best teacher model for distillation
-    #     best_teacher_path = f"{self.dir_name}/best_model_teacher.pth"
-    #     self.logger.info(
-    #         f"Loading best teacher model from {best_teacher_path} for distillation..."
-    #     )
-    #     # Load the best teacher model weights
-    #     teacher_state_dict = torch.load(best_teacher_path)
-    #     self.teacher_model.load_state_dict(teacher_state_dict)
-    #     self.teacher_model.eval()
-
-    #     # Train the student model
-    #     self.logger.info("Training the student model...")
-    #     trainable_params_student = sum(
-    #         p.numel() for p in self.student_model.parameters() if p.requires_grad
-    #     )
-    #     self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
-    #     # Freeze the triplet head parameters to prevent updates
-    #     for param in self.student_model.triplet_head.parameters():
-    #         param.requires_grad = False
-
-    #     for param in self.student_model.attention_module.parameters():
-    #         param.requires_grad = False
-
-    #     self._train_model_components(self.student_model, self.student_optimizer)
-
-    #     # Unfreeze triplet head
-    #     for param in self.student_model.triplet_head.parameters():
-    #         param.requires_grad = True
-
-    #     # Unfreeze attention module
-    #     for param in self.student_model.attention_module.parameters():
-    #         param.requires_grad = True
-
-    #     self._train_model(
-    #         self.student_model,
-    #         self.student_optimizer,
-    #         self.student_scheduler,
-    #         "student",
-    #     )

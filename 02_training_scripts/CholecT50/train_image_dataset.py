@@ -465,10 +465,10 @@ class Trainer:
             optimizer,
             max_lr=[self.learning_rate / 10, self.learning_rate],
             total_steps=len(self.train_loader) * self.num_epochs,
-            pct_start=0.1,  # 10% of training time is warmup
+            pct_start=0.4,  # 10% of training time is warmup
             anneal_strategy="cos",
-            div_factor=5.0,
-            final_div_factor=10.0,
+            div_factor=10.0,
+            final_div_factor=20.0,
         )
 
         return optimizer, scheduler
@@ -566,29 +566,38 @@ class Trainer:
                 # Update the recognizer with the current batch
                 recognize.update(labels, predictions)
 
-        # Compute and log metrics
-        results = recognize.compute_AP(component="ivt")
-        mean_ap = results["mAP"]
-        class_aps = results["AP"]
+        # Compute and log metrics for all components
+        component_results = {
+            "triplet": recognize.compute_AP(component="ivt"),
+            "instrument": recognize.compute_AP(component="i"),
+            "verb": recognize.compute_AP(component="v"),
+            "target": recognize.compute_AP(component="t"),
+        }
 
-        # Log the results
-        self.logger.info(f"TRIPLET METRICS:")
-        self.logger.info(f"  Overall mAP: {mean_ap:.4f}")
+        # Log overall results for each component
+        self.logger.info("VALIDATION METRICS:")
+        self.logger.info(f"TRIPLET: mAP = {component_results['triplet']['mAP']:.4f}")
+        self.logger.info(
+            f"INSTRUMENT: mAP = {component_results['instrument']['mAP']:.4f}"
+        )
+        self.logger.info(f"VERB: mAP = {component_results['verb']['mAP']:.4f}")
+        self.logger.info(f"TARGET: mAP = {component_results['target']['mAP']:.4f}")
+        self.logger.info("-" * 30)
 
-        # Log per-class metrics
-        for i in range(len(class_aps)):
-            # Get the class name
-            original_id = i
-            if hasattr(self.val_loader.dataset, "index_to_triplet"):
-                original_id = self.val_loader.dataset.index_to_triplet[i]
-
+        # Log per-class metrics for triplet
+        triplet_aps = component_results["triplet"]["AP"]
+        self.logger.info("PER-CLASS TRIPLET METRICS:")
+        for i in range(len(triplet_aps)):
+            original_id = (
+                self.val_loader.dataset.index_to_triplet[i]
+                if hasattr(self.val_loader.dataset, "index_to_triplet")
+                else i
+            )
             label_name = self.label_mappings.get(original_id, f"Class_{original_id}")
+            self.logger.info(f"  {label_name}: AP = {triplet_aps[i]:.4f}")
 
-            # Log per-class AP
-            self.logger.info(f"  {label_name}:")
-            self.logger.info(f"    AP: {class_aps[i]:.4f}")
-
-        return mean_ap
+        # Return the triplet mAP for model selection
+        return component_results["triplet"]["mAP"]
 
 
 def main():

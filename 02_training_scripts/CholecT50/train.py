@@ -1,6 +1,6 @@
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
-from curriculum_trainer import MultiTaskSelfDistillationTrainer
+from trainer import MultiTaskSelfDistillationTrainer
 import torch
 from utils import (
     setup_logging,
