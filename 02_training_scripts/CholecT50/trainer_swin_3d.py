@@ -29,7 +29,7 @@ class TripletHead(nn.Module):
         return logits, hidden_features
 
 
-class SimplifiedTrainer:
+class TrainerSwin3D:
     def __init__(
         self,
         num_epochs: int,
@@ -107,7 +107,7 @@ class SimplifiedTrainer:
         scheduler = torch.optim.lr_scheduler.OneCycleLR(
             optimizer,
             max_lr=[self.learning_rate / 10, self.learning_rate],
-            total_steps=len(self.train_loader) * self.num_epochs,
+            total_steps=len(self.train_loader) * int(self.num_epochs * 0.7),
             pct_start=0.1,  # 10% of training time is warmup
             anneal_strategy="cos",
             div_factor=5.0,
@@ -134,7 +134,7 @@ class SimplifiedTrainer:
         # Track best performance
         best_map = 0.0
 
-        for epoch in range(self.num_epochs):
+        for epoch in range(int(self.num_epochs * 0.7)):
             self.model.train()
             epoch_loss = 0.0
 
@@ -167,13 +167,19 @@ class SimplifiedTrainer:
 
             # Validation
             self.logger.info(f"Validation Results - Epoch {epoch+1}/{self.num_epochs}:")
-            triplet_map = self._validate_model()
+            validation_metrics = self._validate_model()
+            triplet_map = validation_metrics["triplet"]
 
             # Log metrics
             current_lrs = [group["lr"] for group in self.optimizer.param_groups]
             self.logger.info(f"Learning rates: {[f'{lr:.6f}' for lr in current_lrs]}")
             self.logger.info(f"Training Loss: {avg_loss:.4f}")
-            self.logger.info(f"Validation mAP: {triplet_map:.4f}")
+            self.logger.info(f"TRIPLET: mAP = {validation_metrics['triplet']:.4f}")
+            self.logger.info(
+                f"INSTRUMENT: mAP = {validation_metrics['instrument']:.4f}"
+            )
+            self.logger.info(f"VERB: mAP = {validation_metrics['verb']:.4f}")
+            self.logger.info(f"TARGET: mAP = {validation_metrics['target']:.4f}")
             self.logger.info("-" * 50)
 
             # Save best model
@@ -222,21 +228,11 @@ class SimplifiedTrainer:
                     recognize.update(labels, predictions)
 
         # Compute and log metrics
-        results = recognize.compute_AP(component="ivt")
-        mean_ap = results["mAP"]
-        class_aps = results["AP"]
+        component_results = {
+            "triplet": recognize.compute_AP(component="ivt")["mAP"],
+            "instrument": recognize.compute_AP(component="i")["mAP"],
+            "verb": recognize.compute_AP(component="v")["mAP"],
+            "target": recognize.compute_AP(component="t")["mAP"],
+        }
 
-        # Log results
-        self.logger.info(f"Overall mAP: {mean_ap:.4f}")
-
-        # Log per-class metrics
-        for i in range(len(class_aps)):
-            original_id = (
-                self.val_loader.dataset.index_to_triplet[i]
-                if hasattr(self.val_loader.dataset, "index_to_triplet")
-                else i
-            )
-            label_name = self.label_mappings.get(original_id, f"Class_{original_id}")
-            self.logger.info(f"  {label_name}: AP = {class_aps[i]:.4f}")
-
-        return mean_ap
+        return component_results

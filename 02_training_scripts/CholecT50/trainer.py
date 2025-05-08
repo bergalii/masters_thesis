@@ -545,27 +545,28 @@ class MultiTaskSelfDistillationTrainer:
                         for task, logits in task_logits.items()
                     }
 
-                    # Get guidance from individual tasks
-                    guidance_inst = torch.matmul(
-                        task_probabilities["instrument"], self.MI
-                    )
-                    guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
-                    guidance_target = torch.matmul(
-                        task_probabilities["target"], self.MT
-                    )
+                    # # Get guidance from individual tasks
+                    # guidance_inst = torch.matmul(
+                    #     task_probabilities["instrument"], self.MI
+                    # )
+                    # guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
+                    # guidance_target = torch.matmul(
+                    #     task_probabilities["target"], self.MT
+                    # )
 
-                    # Combine guidance outputs
-                    guidance = guidance_inst * guidance_verb * guidance_target
+                    # # Combine guidance outputs
+                    # guidance = guidance_inst * guidance_verb * guidance_target
 
-                    # Apply guidance with a scale factor
-                    guided_triplet_probs = (
-                        1 - self.guidance_scale
-                    ) * task_probabilities["triplet"] + self.guidance_scale * (
-                        guidance * task_probabilities["triplet"]
-                    )
+                    # # Apply guidance with a scale factor
+                    # guided_triplet_probs = (
+                    #     1 - self.guidance_scale
+                    # ) * task_probabilities["triplet"] + self.guidance_scale * (
+                    #     guidance * task_probabilities["triplet"]
+                    # )
 
-                    # Update with triplet predictions and the label for the video
-                    predictions = guided_triplet_probs.cpu().numpy()
+                    # # Update with triplet predictions and the label for the video
+                    # predictions = guided_triplet_probs.cpu().numpy()
+                    predictions = task_probabilities["triplet"].cpu().numpy()
                     labels = batch_labels["triplet"][b].unsqueeze(0).cpu().numpy()
 
                     # Update the recognizer with the current video

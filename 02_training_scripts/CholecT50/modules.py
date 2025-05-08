@@ -213,36 +213,6 @@ class MultiTaskHead(nn.Module):
         return logits, hidden_features
 
 
-# class AttentionModule(nn.Module):
-#     def __init__(self, feature_dims, common_dim, num_layers=2, num_heads=4):
-#         super().__init__()
-#         self.common_dim = common_dim
-#         self.component_embeddings = nn.ModuleDict(
-#             {k: nn.Linear(v, common_dim) for k, v in feature_dims.items()}
-#         )
-
-#         encoder_layer = nn.TransformerEncoderLayer(
-#             common_dim, num_heads, dim_feedforward=4 * common_dim, batch_first=True
-#         )
-#         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers)
-
-#     def forward(self, verb_feat, inst_feat, target_feat):
-#         # Project features to common space
-#         verb_emb = self.component_embeddings["verb"](verb_feat).unsqueeze(1)
-#         inst_emb = self.component_embeddings["instrument"](inst_feat).unsqueeze(1)
-#         target_emb = self.component_embeddings["target"](target_feat).unsqueeze(1)
-
-#         # Concatenate as sequence tokens
-#         tokens = torch.cat([verb_emb, inst_emb, target_emb], dim=1)
-
-#         # Process through transformer
-#         transformed = self.transformer(tokens)
-
-#         # Flatten the sequence dimension
-#         batch_size = transformed.size(0)
-#         return transformed.reshape(batch_size, -1)
-
-
 ###################### FPN Implementation #############################
 
 

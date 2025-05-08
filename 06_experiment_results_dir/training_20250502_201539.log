@@ -1,0 +1,189 @@
+Experiment No: 2
+Experiment done for adding a temporal model on top of swin_v2 model.
+
+Best result obtained;
+Training Loss: 0.0081
+TRIPLET: mAP = 0.3210
+INSTRUMENT: mAP = 0.9289
+VERB: mAP = 0.6848
+TARGET: mAP = 0.5376
+--------------------------------------------------------------------------------------
+HYPERPARAMS:
+  random_seed: 42
+  min_occurrences: 100
+  clip_length: 16
+  batch_size: 2
+  frame_width: 480
+  frame_height: 270
+  num_epochs: 20
+  val_split: 2
+  train_ratio: 0.8
+  learning_rate: 0.001
+  weight_decay: 0.001
+  attention_module_common_dim: 256
+  hidden_layer_dim: 512
+  warmup_epochs: 5
+  consistency_loss_weight: 0.0
+  temperature: 1.5
+  gradient_clipping: 5.0
+  sgd_momentum: 0.9
+  guidance_scale: 1.0
+  fpn_out_channels: 256
+Created datasets:
+  Training samples: 7637
+  Validation samples: 744
+  Number of classes:
+    instrument: 6
+    verb: 10
+    target: 15
+    triplet: 69
+Starting LSTM training process...
+Training LSTM model...
+Trainable parameters: 50,975,551
+--------------------------------------------------
+Validation Results - Epoch 1/20:
+Learning rates: ['0.000085', '0.000850']
+Training Loss: 0.0738
+TRIPLET: mAP = 0.2045
+INSTRUMENT: mAP = 0.6725
+VERB: mAP = 0.4996
+TARGET: mAP = 0.3393
+--------------------------------------------------
+New best triplet mAP: 0.2045
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 2/20:
+Learning rates: ['0.000099', '0.000995']
+Training Loss: 0.0542
+TRIPLET: mAP = 0.2270
+INSTRUMENT: mAP = 0.7525
+VERB: mAP = 0.5345
+TARGET: mAP = 0.4155
+--------------------------------------------------
+New best triplet mAP: 0.2270
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 3/20:
+Learning rates: ['0.000096', '0.000962']
+Training Loss: 0.0440
+TRIPLET: mAP = 0.2267
+INSTRUMENT: mAP = 0.7799
+VERB: mAP = 0.5778
+TARGET: mAP = 0.4234
+--------------------------------------------------
+Validation Results - Epoch 4/20:
+Learning rates: ['0.000090', '0.000901']
+Training Loss: 0.0384
+TRIPLET: mAP = 0.2292
+INSTRUMENT: mAP = 0.8221
+VERB: mAP = 0.6303
+TARGET: mAP = 0.3845
+--------------------------------------------------
+New best triplet mAP: 0.2292
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 5/20:
+Learning rates: ['0.000082', '0.000815']
+Training Loss: 0.0327
+TRIPLET: mAP = 0.2583
+INSTRUMENT: mAP = 0.8642
+VERB: mAP = 0.6062
+TARGET: mAP = 0.4432
+--------------------------------------------------
+New best triplet mAP: 0.2583
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 6/20:
+Learning rates: ['0.000071', '0.000712']
+Training Loss: 0.0282
+TRIPLET: mAP = 0.2804
+INSTRUMENT: mAP = 0.8942
+VERB: mAP = 0.6268
+TARGET: mAP = 0.4462
+--------------------------------------------------
+New best triplet mAP: 0.2804
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 7/20:
+Learning rates: ['0.000060', '0.000595']
+Training Loss: 0.0244
+TRIPLET: mAP = 0.2633
+INSTRUMENT: mAP = 0.8895
+VERB: mAP = 0.6264
+TARGET: mAP = 0.4436
+--------------------------------------------------
+Validation Results - Epoch 8/20:
+Learning rates: ['0.000047', '0.000473']
+Training Loss: 0.0209
+TRIPLET: mAP = 0.2878
+INSTRUMENT: mAP = 0.8916
+VERB: mAP = 0.6126
+TARGET: mAP = 0.4652
+--------------------------------------------------
+New best triplet mAP: 0.2878
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 9/20:
+Learning rates: ['0.000035', '0.000354']
+Training Loss: 0.0173
+TRIPLET: mAP = 0.2915
+INSTRUMENT: mAP = 0.8607
+VERB: mAP = 0.6133
+TARGET: mAP = 0.4791
+--------------------------------------------------
+New best triplet mAP: 0.2915
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 10/20:
+Learning rates: ['0.000024', '0.000244']
+Training Loss: 0.0144
+TRIPLET: mAP = 0.2994
+INSTRUMENT: mAP = 0.9104
+VERB: mAP = 0.6531
+TARGET: mAP = 0.5252
+--------------------------------------------------
+New best triplet mAP: 0.2994
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 11/20:
+Learning rates: ['0.000015', '0.000151']
+Training Loss: 0.0117
+TRIPLET: mAP = 0.3048
+INSTRUMENT: mAP = 0.9023
+VERB: mAP = 0.6487
+TARGET: mAP = 0.5225
+--------------------------------------------------
+New best triplet mAP: 0.3048
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 12/20:
+Learning rates: ['0.000008', '0.000080']
+Training Loss: 0.0100
+TRIPLET: mAP = 0.3045
+INSTRUMENT: mAP = 0.9153
+VERB: mAP = 0.6745
+TARGET: mAP = 0.5262
+--------------------------------------------------
+Validation Results - Epoch 13/20:
+Learning rates: ['0.000004', '0.000035']
+Training Loss: 0.0086
+TRIPLET: mAP = 0.3208
+INSTRUMENT: mAP = 0.9308
+VERB: mAP = 0.6771
+TARGET: mAP = 0.5336
+--------------------------------------------------
+New best triplet mAP: 0.3208
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 14/20:
+Learning rates: ['0.000002', '0.000020']
+Training Loss: 0.0081
+TRIPLET: mAP = 0.3210
+INSTRUMENT: mAP = 0.9289
+VERB: mAP = 0.6848
+TARGET: mAP = 0.5376
+--------------------------------------------------
+New best triplet mAP: 0.3210
+Model saved to 04_models_dir/training_20250502_201539/best_model.pth
+--------------------------------------------------
+Training completed!

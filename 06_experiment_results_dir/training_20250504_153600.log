@@ -1,0 +1,267 @@
+Experiment No: 3
+Experiment done for using a spatio-temporal model of swin_3d
+
+Best result obtained;
+Training Loss: 0.0096
+TRIPLET: mAP = 0.3738
+INSTRUMENT: mAP = 0.9413
+VERB: mAP = 0.7784
+TARGET: mAP = 0.5479
+--------------------------------------------------------------------------------------
+HYPERPARAMS:
+  random_seed: 42
+  min_occurrences: 100
+  clip_length: 16
+  batch_size: 2
+  frame_width: 480
+  frame_height: 270
+  num_epochs: 20
+  val_split: 2
+  train_ratio: 0.8
+  learning_rate: 0.001
+  weight_decay: 0.001
+  attention_module_common_dim: 256
+  hidden_layer_dim: 512
+  warmup_epochs: 5
+  consistency_loss_weight: 0.0
+  temperature: 1.5
+  gradient_clipping: 5.0
+  sgd_momentum: 0.9
+  guidance_scale: 1.0
+  fpn_out_channels: 256
+--Training and Validation Dataset Classes--
+INSTRUMENT LABELS:
+  0: grasper - 6647, 737
+  1: bipolar - 2011, 52
+  2: hook - 2314, 321
+  3: scissors - 802, 29
+  4: clipper - 411, 37
+  5: irrigator - 961, 52
+VERB LABELS:
+  0: grasp - 1083, 71
+  1: retract - 5819, 614
+  2: dissect - 2624, 285
+  3: coagulate - 1276, 55
+  4: clip - 311, 33
+  5: cut - 602, 19
+  6: aspirate - 231, 38
+  7: irrigate - 208, 2
+  8: pack - 100, 5
+  9: null_verb - 892, 106
+TARGET LABELS:
+  0: gallbladder - 5260, 615
+  1: cystic_plate - 613, 21
+  2: cystic_duct - 838, 66
+  3: cystic_artery - 502, 42
+  4: cystic_pedicle - 200, 0
+  5: blood_vessel - 300, 3
+  6: fluid - 231, 38
+  7: abdominal_wall_cavity - 207, 6
+  8: liver - 2020, 177
+  9: adhesion - 100, 0
+  10: omentum - 1120, 94
+  11: peritoneum - 384, 5
+  12: gut - 198, 6
+  13: specimen_bag - 281, 49
+  14: null_target - 892, 106
+TRIPLET LABELS:
+  0: grasper,dissect,cystic_plate - 100, 0
+  1: grasper,dissect,gallbladder - 100, 2
+  4: grasper,grasp,cystic_duct - 100, 4
+  6: grasper,grasp,cystic_plate - 100, 0
+  7: grasper,grasp,gallbladder - 285, 17
+  10: grasper,grasp,omentum - 120, 1
+  12: grasper,grasp,specimen_bag - 281, 49
+  13: grasper,pack,gallbladder - 100, 5
+  14: grasper,retract,cystic_duct - 101, 0
+  16: grasper,retract,cystic_plate - 107, 0
+  17: grasper,retract,gallbladder - 3254, 410
+  18: grasper,retract,gut - 198, 6
+  19: grasper,retract,liver - 929, 145
+  20: grasper,retract,omentum - 461, 38
+  21: grasper,retract,peritoneum - 138, 4
+  22: bipolar,coagulate,abdominal_wall_cavity - 100, 5
+  23: bipolar,coagulate,blood_vessel - 100, 1
+  24: bipolar,coagulate,cystic_artery - 100, 2
+  26: bipolar,coagulate,cystic_pedicle - 100, 0
+  27: bipolar,coagulate,cystic_plate - 100, 4
+  28: bipolar,coagulate,gallbladder - 100, 0
+  29: bipolar,coagulate,liver - 165, 27
+  30: bipolar,coagulate,omentum - 111, 8
+  32: bipolar,dissect,adhesion - 100, 0
+  33: bipolar,dissect,cystic_artery - 100, 1
+  34: bipolar,dissect,cystic_duct - 100, 1
+  35: bipolar,dissect,cystic_plate - 100, 0
+  36: bipolar,dissect,gallbladder - 100, 0
+  37: bipolar,dissect,omentum - 100, 0
+  39: bipolar,grasp,liver - 197, 0
+  43: bipolar,retract,gallbladder - 100, 0
+  44: bipolar,retract,liver - 113, 0
+  48: hook,coagulate,cystic_duct - 100, 1
+  51: hook,coagulate,gallbladder - 100, 2
+  52: hook,coagulate,liver - 100, 2
+  53: hook,coagulate,omentum - 100, 1
+  57: hook,dissect,cystic_artery - 100, 18
+  58: hook,dissect,cystic_duct - 228, 31
+  59: hook,dissect,cystic_plate - 106, 17
+  60: hook,dissect,gallbladder - 821, 174
+  61: hook,dissect,omentum - 128, 33
+  62: hook,dissect,peritoneum - 141, 1
+  63: hook,retract,gallbladder - 100, 4
+  64: hook,retract,liver - 100, 0
+  65: scissors,coagulate,omentum - 0, 2
+  67: scissors,cut,blood_vessel - 100, 1
+  68: scissors,cut,cystic_artery - 100, 7
+  69: scissors,cut,cystic_duct - 100, 11
+  71: scissors,cut,liver - 197, 0
+  73: scissors,cut,peritoneum - 105, 0
+  75: scissors,dissect,gallbladder - 100, 0
+  76: scissors,dissect,omentum - 0, 7
+  77: clipper,clip,blood_vessel - 100, 1
+  78: clipper,clip,cystic_artery - 102, 14
+  79: clipper,clip,cystic_duct - 109, 18
+  82: irrigator,aspirate,fluid - 231, 38
+  84: irrigator,dissect,cystic_pedicle - 100, 0
+  87: irrigator,dissect,omentum - 100, 0
+  88: irrigator,irrigate,abdominal_wall_cavity - 107, 1
+  90: irrigator,irrigate,liver - 101, 1
+  91: irrigator,retract,gallbladder - 100, 1
+  92: irrigator,retract,liver - 118, 2
+  93: irrigator,retract,omentum - 0, 4
+  94: grasper,null_verb,null_target - 273, 56
+  95: bipolar,null_verb,null_target - 125, 3
+  96: hook,null_verb,null_target - 190, 37
+  97: scissors,null_verb,null_target - 100, 1
+  98: clipper,null_verb,null_target - 100, 4
+  99: irrigator,null_verb,null_target - 104, 5
+--------------------------------------------------
+Training simplified model...
+Trainable parameters: 49,939,739
+--------------------------------------------------
+Validation Results - Epoch 1/20:
+Learning rates: ['0.000085', '0.000850']
+Training Loss: 0.0720
+TRIPLET: mAP = 0.2616
+INSTRUMENT: mAP = 0.8416
+VERB: mAP = 0.6444
+TARGET: mAP = 0.4505
+--------------------------------------------------
+New best triplet mAP: 0.2616
+Model saved to 04_models_dir/training_20250504_153600/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 2/20:
+Learning rates: ['0.000099', '0.000995']
+Training Loss: 0.0458
+TRIPLET: mAP = 0.2565
+INSTRUMENT: mAP = 0.8733
+VERB: mAP = 0.5861
+TARGET: mAP = 0.4226
+--------------------------------------------------
+Validation Results - Epoch 3/20:
+Learning rates: ['0.000096', '0.000962']
+Training Loss: 0.0384
+TRIPLET: mAP = 0.2414
+INSTRUMENT: mAP = 0.8398
+VERB: mAP = 0.5512
+TARGET: mAP = 0.4471
+--------------------------------------------------
+Validation Results - Epoch 4/20:
+Learning rates: ['0.000090', '0.000901']
+Training Loss: 0.0328
+TRIPLET: mAP = 0.2799
+INSTRUMENT: mAP = 0.8880
+VERB: mAP = 0.6363
+TARGET: mAP = 0.4522
+--------------------------------------------------
+New best triplet mAP: 0.2799
+Model saved to 04_models_dir/training_20250504_153600/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 5/20:
+Learning rates: ['0.000082', '0.000815']
+Training Loss: 0.0269
+TRIPLET: mAP = 0.2979
+INSTRUMENT: mAP = 0.8762
+VERB: mAP = 0.7135
+TARGET: mAP = 0.4949
+--------------------------------------------------
+New best triplet mAP: 0.2979
+Model saved to 04_models_dir/training_20250504_153600/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 6/20:
+Learning rates: ['0.000071', '0.000712']
+Training Loss: 0.0217
+TRIPLET: mAP = 0.3327
+INSTRUMENT: mAP = 0.9055
+VERB: mAP = 0.7030
+TARGET: mAP = 0.5105
+--------------------------------------------------
+New best triplet mAP: 0.3327
+Model saved to 04_models_dir/training_20250504_153600/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 7/20:
+Learning rates: ['0.000060', '0.000595']
+Training Loss: 0.0186
+TRIPLET: mAP = 0.3096
+INSTRUMENT: mAP = 0.9028
+VERB: mAP = 0.6793
+TARGET: mAP = 0.4644
+--------------------------------------------------
+Validation Results - Epoch 8/20:
+Learning rates: ['0.000047', '0.000473']
+Training Loss: 0.0145
+TRIPLET: mAP = 0.3142
+INSTRUMENT: mAP = 0.8984
+VERB: mAP = 0.6862
+TARGET: mAP = 0.4932
+--------------------------------------------------
+Validation Results - Epoch 9/20:
+Learning rates: ['0.000035', '0.000354']
+Training Loss: 0.0120
+TRIPLET: mAP = 0.3205
+INSTRUMENT: mAP = 0.9262
+VERB: mAP = 0.7272
+TARGET: mAP = 0.5226
+--------------------------------------------------
+Validation Results - Epoch 10/20:
+Learning rates: ['0.000024', '0.000244']
+Training Loss: 0.0096
+TRIPLET: mAP = 0.3738
+INSTRUMENT: mAP = 0.9413
+VERB: mAP = 0.7784
+TARGET: mAP = 0.5479
+--------------------------------------------------
+New best triplet mAP: 0.3738
+Model saved to 04_models_dir/training_20250504_153600/best_model.pth
+--------------------------------------------------
+Validation Results - Epoch 11/20:
+Learning rates: ['0.000015', '0.000151']
+Training Loss: 0.0073
+TRIPLET: mAP = 0.3605
+INSTRUMENT: mAP = 0.9438
+VERB: mAP = 0.7712
+TARGET: mAP = 0.5645
+--------------------------------------------------
+Validation Results - Epoch 12/20:
+Learning rates: ['0.000008', '0.000080']
+Training Loss: 0.0062
+TRIPLET: mAP = 0.3578
+INSTRUMENT: mAP = 0.9388
+VERB: mAP = 0.7656
+TARGET: mAP = 0.5422
+--------------------------------------------------
+Validation Results - Epoch 13/20:
+Learning rates: ['0.000004', '0.000035']
+Training Loss: 0.0053
+TRIPLET: mAP = 0.3687
+INSTRUMENT: mAP = 0.9409
+VERB: mAP = 0.7775
+TARGET: mAP = 0.5426
+--------------------------------------------------
+Validation Results - Epoch 14/20:
+Learning rates: ['0.000002', '0.000020']
+Training Loss: 0.0046
+TRIPLET: mAP = 0.3705
+INSTRUMENT: mAP = 0.9427
+VERB: mAP = 0.7815
+TARGET: mAP = 0.5563
+--------------------------------------------------

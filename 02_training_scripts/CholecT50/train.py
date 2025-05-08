@@ -1,6 +1,7 @@
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
 from trainer import MultiTaskSelfDistillationTrainer
+from trainer_swin_3d import TrainerSwin3D
 import torch
 from utils import (
     setup_logging,
@@ -81,6 +82,21 @@ def main():
         logger=logger,
         dir_name=model_dir,
     )
+
+    # trainer = TrainerSwin3D(
+    #     num_epochs=configs["num_epochs"],
+    #     train_loader=train_loader,
+    #     val_loader=val_loader,
+    #     label_mappings=mappings,
+    #     num_classes=train_dataset.num_classes,
+    #     learning_rate=configs["learning_rate"],
+    #     weight_decay=configs["weight_decay"],
+    #     hidden_layer_dim=configs["hidden_layer_dim"],
+    #     gradient_clipping=configs["gradient_clipping"],
+    #     device=DEVICE,
+    #     logger=logger,
+    #     dir_name=model_dir,
+    # )
 
     trainer.train()
 

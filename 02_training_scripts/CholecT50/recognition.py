@@ -123,7 +123,7 @@ class Recognition(Disentangle):
             mean = np.nanmean(classwise[has_positive])
         return {"AP": classwise, "mAP": mean}
 
-    def compute_global_AP(self, component="ivt", ignore_null=False):
+    def compute_global_AP(self, component="ivt"):
         """
         compute performance for all seen examples after a reset_global()
         @args

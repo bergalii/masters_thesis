@@ -6,7 +6,6 @@ from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
 from utils import set_seeds, load_configs
 from modules import MultiTaskHead, AttentionModule
-from collections import defaultdict
 
 
 class ModelValidator:
@@ -205,8 +204,9 @@ class ModelValidator:
                     recognize.update(labels, predictions)
 
                     # Signal end of video to the Recognition evaluator
-                    # recognize.video_end()
-        # Compute video-level AP metrics
+        #             recognize.video_end()
+
+        # # Compute video-level AP metrics
         # results = {
         #     "triplet": recognize.compute_video_AP("ivt"),
         #     "verb": recognize.compute_video_AP("v"),
@@ -238,7 +238,7 @@ def main():
     CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
-    MODEL_PATH = r"04_models_dir/training_20250428_094504/best_model_student.pth"
+    MODEL_PATH = r"04_models_dir/training_20250507_191455/best_model_teacher.pth"
 
     torch.cuda.set_device(1)
     DEVICE = torch.device("cuda:1")
