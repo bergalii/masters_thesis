@@ -4,8 +4,10 @@ from torchvision.models.video.swin_transformer import swin3d_s, Swin3D_S_Weights
 from recognition import Recognition
 from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
+from sklearn.metrics import precision_score, recall_score, f1_score
 from utils import set_seeds, load_configs
 from modules import MultiTaskHead, AttentionModule
+import numpy as np
 
 
 class ModelValidator:
@@ -47,6 +49,9 @@ class ModelValidator:
         self.hidden_layer_dim = hidden_layer_dim
         self.attention_module_common_dim = attention_module_common_dim
         self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
+        # Label mappings for per-class analysis
+        self.label_mappings = val_dataset.label_mappings
+
         # Initialize and load the model
         self.model = self._initialize_model()
 
@@ -138,6 +143,12 @@ class ModelValidator:
         # recognize.reset_global()
         recognize.reset()
 
+        # Storage for threshold-based metrics
+        all_predictions = {
+            task: [] for task in ["verb", "instrument", "target", "triplet"]
+        }
+        all_labels = {task: [] for task in ["verb", "instrument", "target", "triplet"]}
+
         with torch.no_grad():
             for inputs_batch, batch_labels in self.val_loader:
                 # inputs have dimension [B, N, C, T, H, W]
@@ -203,22 +214,16 @@ class ModelValidator:
                     # Update the recognizer with the current video
                     recognize.update(labels, predictions)
 
-                    # Signal end of video to the Recognition evaluator
-        #             recognize.video_end()
+                    # Store for threshold-based metrics
+                    for task in ["verb", "instrument", "target"]:
+                        all_predictions[task].append(
+                            task_probabilities[task].cpu().numpy()[0]
+                        )
+                        all_labels[task].append(batch_labels[task][b].cpu().numpy())
 
-        # # Compute video-level AP metrics
-        # results = {
-        #     "triplet": recognize.compute_video_AP("ivt"),
-        #     "verb": recognize.compute_video_AP("v"),
-        #     "instrument": recognize.compute_video_AP("i"),
-        #     "target": recognize.compute_video_AP("t"),
-        # }
-
-        # print("\nVideo-level Validation Results:")
-        # for task in ["verb", "instrument", "target", "triplet"]:
-        #     print(f"{task.capitalize()} Results:")
-        #     print(f"Video-level mAP: {results[task]['mAP']:.4f}")
-        #     print(f"Video-level AP: {results[task]['AP']}")
+                    # Store guided triplet predictions
+                    all_predictions["triplet"].append(predictions[0])
+                    all_labels["triplet"].append(labels[0])
 
         global_results = {
             "triplet": recognize.compute_AP("ivt"),
@@ -228,17 +233,115 @@ class ModelValidator:
         }
 
         print("-" * 50)
-        print("\nGlobal Validation Results (for comparison):")
+        print("\nGlobal Validation Results (ivtmetrics library):")
         for task in ["verb", "instrument", "target", "triplet"]:
             print(f"{task.capitalize()} Results:")
             print(f"Global mAP: {global_results[task]['mAP']:.4f}")
+
+        for task in ["verb", "instrument", "target", "triplet"]:
+            results = global_results[task]
+            class_aps = results["AP"]
+
+            print(f"\n{task.upper()} DETAILED METRICS:")
+            print(f"  Overall mAP: {results['mAP']:.4f}")
+
+            # Print per-class metrics
+            for i in range(len(class_aps)):
+                # Get the class name based on the component
+                if task == "triplet":
+                    original_id = self.val_loader.dataset.index_to_triplet[i]
+                    label_name = self.label_mappings[task].get(
+                        original_id, f"Class_{original_id}"
+                    )
+                else:
+                    label_name = self.label_mappings[task].get(i, f"Class_{i}")
+
+                print(f"  {label_name}:")
+                print(f"    AP: {class_aps[i]:.4f}")
+
+        # # Convert lists to numpy arrays for threshold-based metrics
+        # for task in ["verb", "instrument", "target", "triplet"]:
+        #     all_predictions[task] = np.array(all_predictions[task])
+        #     all_labels[task] = np.array(all_labels[task])
+
+        # print("\n" + "-" * 50)
+        # print("Threshold-based Metrics (sklearn):")
+        # print("-" * 50)
+
+        # # Compute threshold-based metrics for each task
+        # for task in ["verb", "instrument", "target", "triplet"]:
+        #     predictions = all_predictions[task]
+        #     labels = all_labels[task]
+
+        #     task_metrics = {task: {"per_class": {}}}
+
+        #     # Calculate additional metrics per class
+        #     for i in range(predictions.shape[1]):
+        #         class_preds = predictions[:, i]
+        #         class_labels = labels[:, i]
+
+        #         # Skip if no positive samples
+        #         if np.sum(class_labels) == 0:
+        #             continue
+
+        #         # Get the class name
+        #         if task == "triplet":
+        #             original_id = self.val_dataset.index_to_triplet[i]
+        #             label_name = self.label_mappings[task].get(
+        #                 original_id, f"Class_{original_id}"
+        #             )
+        #         else:
+        #             label_name = self.label_mappings[task].get(i, f"Class_{i}")
+
+        #         # Calculate optimal threshold and additional metrics
+        #         thresholds = np.arange(0.3, 0.8, 0.1)
+        #         f1_scores = [
+        #             f1_score(class_labels, class_preds > t, zero_division=0)
+        #             for t in thresholds
+        #         ]
+        #         optimal_threshold = thresholds[np.argmax(f1_scores)]
+        #         binary_preds = (class_preds > optimal_threshold).astype(int)
+
+        #         # Store detailed metrics per class
+        #         task_metrics[task]["per_class"][label_name] = {
+        #             "precision": precision_score(
+        #                 class_labels, binary_preds, zero_division=0
+        #             ),
+        #             "recall": recall_score(class_labels, binary_preds, zero_division=0),
+        #             "f1": f1_score(class_labels, binary_preds, zero_division=0),
+        #             "optimal_threshold": optimal_threshold,
+        #         }
+
+        #     print(f"\n{task.upper()} METRICS:")
+
+        #     # Calculate and print macro averages
+        #     per_class_metrics = task_metrics[task]["per_class"]
+        #     if per_class_metrics:
+        #         precisions = [m["precision"] for m in per_class_metrics.values()]
+        #         recalls = [m["recall"] for m in per_class_metrics.values()]
+        #         f1s = [m["f1"] for m in per_class_metrics.values()]
+
+        #         print(f"  Macro Average:")
+        #         print(f"    Precision: {np.mean(precisions):.4f}")
+        #         print(f"    Recall: {np.mean(recalls):.4f}")
+        #         print(f"    F1-Score: {np.mean(f1s):.4f}")
+
+        #     # Log per-class metrics
+        #     for class_name, class_metrics in task_metrics[task]["per_class"].items():
+        #         print(f"  {class_name}:")
+        #         print(f"    F1: {class_metrics['f1']:.4f}")
+        #         print(f"    Precision: {class_metrics['precision']:.4f}")
+        #         print(f"    Recall: {class_metrics['recall']:.4f}")
+        #         print(
+        #             f"    Optimal threshold: {class_metrics['optimal_threshold']:.2f}"
+        #         )
 
 
 def main():
     CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
     ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
-    MODEL_PATH = r"04_models_dir/training_20250507_191455/best_model_teacher.pth"
+    MODEL_PATH = r"04_models_dir/training_20250505_211505/best_model_teacher.pth"
 
     torch.cuda.set_device(1)
     DEVICE = torch.device("cuda:1")

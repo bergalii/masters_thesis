@@ -1,7 +1,7 @@
-from dataset import MultiTaskVideoDataset
+# from dataset import MultiTaskVideoDataset
 from torch.utils.data import DataLoader
 from trainer import MultiTaskSelfDistillationTrainer
-from trainer_swin_3d import TrainerSwin3D
+from datasetUKE import MultiTaskVideoDataset
 import torch
 from utils import (
     setup_logging,
@@ -13,8 +13,10 @@ from pathlib import Path
 
 
 def main():
-    CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
-    ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
+    # CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
+    # ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
+    CLIPS_DIR = r"05_datasets_dir/UKE/clips"
+    ANNOTATIONS_PATH = r"05_datasets_dir/UKE/gt.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
 
     dir_name, logger = setup_logging("training")
@@ -50,7 +52,7 @@ def main():
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
         min_occurrences=configs["min_occurrences"],
-        cross_val_fold=configs["val_split"],
+        # cross_val_fold=configs["val_split"],
     )
     train_loader = DataLoader(
         train_dataset, batch_size=configs["batch_size"], shuffle=True
@@ -82,21 +84,6 @@ def main():
         logger=logger,
         dir_name=model_dir,
     )
-
-    # trainer = TrainerSwin3D(
-    #     num_epochs=configs["num_epochs"],
-    #     train_loader=train_loader,
-    #     val_loader=val_loader,
-    #     label_mappings=mappings,
-    #     num_classes=train_dataset.num_classes,
-    #     learning_rate=configs["learning_rate"],
-    #     weight_decay=configs["weight_decay"],
-    #     hidden_layer_dim=configs["hidden_layer_dim"],
-    #     gradient_clipping=configs["gradient_clipping"],
-    #     device=DEVICE,
-    #     logger=logger,
-    #     dir_name=model_dir,
-    # )
 
     trainer.train()
 

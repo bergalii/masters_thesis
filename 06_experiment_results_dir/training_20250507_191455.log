@@ -1,0 +1,6239 @@
+Experiment No: 4 - 
+Swin 3D + Attention + Consistency Loss (0.5) Experiment
+
+Best result;
+Verb - Loss: 0.0677, mAP: 0.7726
+Instrument - Loss: 0.0375, mAP: 0.9196
+Target - Loss: 0.0611, mAP: 0.5145
+Triplet - Loss: 0.0273, mAP: 0.4111
+
+Cuda is active and using GPU: 1
+HYPERPARAMS:
+  random_seed: 42
+  min_occurrences: 100
+  clip_length: 16
+  batch_size: 2
+  frame_width: 480
+  frame_height: 270
+  num_epochs: 20
+  val_split: 2
+  train_ratio: 0.8
+  learning_rate: 0.001
+  weight_decay: 0.001
+  attention_module_common_dim: 256
+  hidden_layer_dim: 512
+  warmup_epochs: 5
+  consistency_loss_weight: 0.5
+  temperature: 1.5
+  gradient_clipping: 5.0
+  sgd_momentum: 0.9
+  guidance_scale: 0.5
+  fpn_out_channels: 256
+--Training and Validation Dataset Classes--
+INSTRUMENT LABELS:
+  0: grasper - 6647, 737
+  1: bipolar - 2011, 52
+  2: hook - 2314, 321
+  3: scissors - 802, 29
+  4: clipper - 411, 37
+  5: irrigator - 961, 52
+VERB LABELS:
+  0: grasp - 1083, 71
+  1: retract - 5819, 614
+  2: dissect - 2624, 285
+  3: coagulate - 1276, 55
+  4: clip - 311, 33
+  5: cut - 602, 19
+  6: aspirate - 231, 38
+  7: irrigate - 208, 2
+  8: pack - 100, 5
+  9: null_verb - 892, 106
+TARGET LABELS:
+  0: gallbladder - 5260, 615
+  1: cystic_plate - 613, 21
+  2: cystic_duct - 838, 66
+  3: cystic_artery - 502, 42
+  4: cystic_pedicle - 200, 0
+  5: blood_vessel - 300, 3
+  6: fluid - 231, 38
+  7: abdominal_wall_cavity - 207, 6
+  8: liver - 2020, 177
+  9: adhesion - 100, 0
+  10: omentum - 1120, 94
+  11: peritoneum - 384, 5
+  12: gut - 198, 6
+  13: specimen_bag - 281, 49
+  14: null_target - 892, 106
+TRIPLET LABELS:
+  0: grasper,dissect,cystic_plate - 100, 0
+  1: grasper,dissect,gallbladder - 100, 2
+  4: grasper,grasp,cystic_duct - 100, 4
+  6: grasper,grasp,cystic_plate - 100, 0
+  7: grasper,grasp,gallbladder - 285, 17
+  10: grasper,grasp,omentum - 120, 1
+  12: grasper,grasp,specimen_bag - 281, 49
+  13: grasper,pack,gallbladder - 100, 5
+  14: grasper,retract,cystic_duct - 101, 0
+  16: grasper,retract,cystic_plate - 107, 0
+  17: grasper,retract,gallbladder - 3254, 410
+  18: grasper,retract,gut - 198, 6
+  19: grasper,retract,liver - 929, 145
+  20: grasper,retract,omentum - 461, 38
+  21: grasper,retract,peritoneum - 138, 4
+  22: bipolar,coagulate,abdominal_wall_cavity - 100, 5
+  23: bipolar,coagulate,blood_vessel - 100, 1
+  24: bipolar,coagulate,cystic_artery - 100, 2
+  26: bipolar,coagulate,cystic_pedicle - 100, 0
+  27: bipolar,coagulate,cystic_plate - 100, 4
+  28: bipolar,coagulate,gallbladder - 100, 0
+  29: bipolar,coagulate,liver - 165, 27
+  30: bipolar,coagulate,omentum - 111, 8
+  32: bipolar,dissect,adhesion - 100, 0
+  33: bipolar,dissect,cystic_artery - 100, 1
+  34: bipolar,dissect,cystic_duct - 100, 1
+  35: bipolar,dissect,cystic_plate - 100, 0
+  36: bipolar,dissect,gallbladder - 100, 0
+  37: bipolar,dissect,omentum - 100, 0
+  39: bipolar,grasp,liver - 197, 0
+  43: bipolar,retract,gallbladder - 100, 0
+  44: bipolar,retract,liver - 113, 0
+  48: hook,coagulate,cystic_duct - 100, 1
+  51: hook,coagulate,gallbladder - 100, 2
+  52: hook,coagulate,liver - 100, 2
+  53: hook,coagulate,omentum - 100, 1
+  57: hook,dissect,cystic_artery - 100, 18
+  58: hook,dissect,cystic_duct - 228, 31
+  59: hook,dissect,cystic_plate - 106, 17
+  60: hook,dissect,gallbladder - 821, 174
+  61: hook,dissect,omentum - 128, 33
+  62: hook,dissect,peritoneum - 141, 1
+  63: hook,retract,gallbladder - 100, 4
+  64: hook,retract,liver - 100, 0
+  65: scissors,coagulate,omentum - 0, 2
+  67: scissors,cut,blood_vessel - 100, 1
+  68: scissors,cut,cystic_artery - 100, 7
+  69: scissors,cut,cystic_duct - 100, 11
+  71: scissors,cut,liver - 197, 0
+  73: scissors,cut,peritoneum - 105, 0
+  75: scissors,dissect,gallbladder - 100, 0
+  76: scissors,dissect,omentum - 0, 7
+  77: clipper,clip,blood_vessel - 100, 1
+  78: clipper,clip,cystic_artery - 102, 14
+  79: clipper,clip,cystic_duct - 109, 18
+  82: irrigator,aspirate,fluid - 231, 38
+  84: irrigator,dissect,cystic_pedicle - 100, 0
+  87: irrigator,dissect,omentum - 100, 0
+  88: irrigator,irrigate,abdominal_wall_cavity - 107, 1
+  90: irrigator,irrigate,liver - 101, 1
+  91: irrigator,retract,gallbladder - 100, 1
+  92: irrigator,retract,liver - 118, 2
+  93: irrigator,retract,omentum - 0, 4
+  94: grasper,null_verb,null_target - 273, 56
+  95: bipolar,null_verb,null_target - 125, 3
+  96: hook,null_verb,null_target - 190, 37
+  97: scissors,null_verb,null_target - 100, 1
+  98: clipper,null_verb,null_target - 100, 4
+  99: irrigator,null_verb,null_target - 104, 5
+--------------------------------------------------
+Training teacher model...
+Trainable parameters: 53,501,304
+--------------------------------------------------
+Validation Results - Epoch 1/14:
+TRIPLET METRICS:
+  Overall mAP: 0.2667
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0130
+  grasper,grasp,cystic_duct:
+    AP: 0.1704
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1099
+  grasper,grasp,omentum:
+    AP: 0.0244
+  grasper,grasp,specimen_bag:
+    AP: 0.9102
+  grasper,pack,gallbladder:
+    AP: 0.1037
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9177
+  grasper,retract,gut:
+    AP: 0.0594
+  grasper,retract,liver:
+    AP: 0.6746
+  grasper,retract,omentum:
+    AP: 0.5803
+  grasper,retract,peritoneum:
+    AP: 0.4211
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9667
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0333
+  bipolar,coagulate,cystic_artery:
+    AP: 0.1178
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0881
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9164
+  bipolar,coagulate,omentum:
+    AP: 0.6391
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0093
+  bipolar,dissect,cystic_duct:
+    AP: 0.0061
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.0357
+  hook,coagulate,gallbladder:
+    AP: 0.0128
+  hook,coagulate,liver:
+    AP: 0.0203
+  hook,coagulate,omentum:
+    AP: 0.0556
+  hook,dissect,cystic_artery:
+    AP: 0.2432
+  hook,dissect,cystic_duct:
+    AP: 0.2790
+  hook,dissect,cystic_plate:
+    AP: 0.0619
+  hook,dissect,gallbladder:
+    AP: 0.7587
+  hook,dissect,omentum:
+    AP: 0.2542
+  hook,dissect,peritoneum:
+    AP: 0.0154
+  hook,retract,gallbladder:
+    AP: 0.0465
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0103
+  scissors,cut,blood_vessel:
+    AP: 0.0238
+  scissors,cut,cystic_artery:
+    AP: 0.3343
+  scissors,cut,cystic_duct:
+    AP: 0.4588
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.5976
+  clipper,clip,blood_vessel:
+    AP: 0.0370
+  clipper,clip,cystic_artery:
+    AP: 0.6079
+  clipper,clip,cystic_duct:
+    AP: 0.4097
+  irrigator,aspirate,fluid:
+    AP: 0.7839
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1250
+  irrigator,irrigate,liver:
+    AP: 0.0476
+  irrigator,retract,gallbladder:
+    AP: 0.0222
+  irrigator,retract,liver:
+    AP: 0.1889
+  irrigator,retract,omentum:
+    AP: 0.4875
+  grasper,null_verb,null_target:
+    AP: 0.3295
+  bipolar,null_verb,null_target:
+    AP: 0.0303
+  hook,null_verb,null_target:
+    AP: 0.1177
+  scissors,null_verb,null_target:
+    AP: 0.0076
+  clipper,null_verb,null_target:
+    AP: 0.1248
+  irrigator,null_verb,null_target:
+    AP: 0.0446
+INSTRUMENT METRICS:
+  Overall mAP: 0.8701
+  grasper:
+    AP: 0.9842
+  bipolar:
+    AP: 0.9205
+  hook:
+    AP: 0.9607
+  scissors:
+    AP: 0.8086
+  clipper:
+    AP: 0.8677
+  irrigator:
+    AP: 0.6789
+VERB METRICS:
+  Overall mAP: 0.6113
+  grasp:
+    AP: 0.7707
+  retract:
+    AP: 0.9563
+  dissect:
+    AP: 0.9027
+  coagulate:
+    AP: 0.6997
+  clip:
+    AP: 0.8774
+  cut:
+    AP: 0.6750
+  aspirate:
+    AP: 0.7839
+  irrigate:
+    AP: 0.0512
+  pack:
+    AP: 0.1037
+  null_verb:
+    AP: 0.2927
+TARGET METRICS:
+  Overall mAP: 0.4344
+  gallbladder:
+    AP: 0.9098
+  cystic_plate:
+    AP: 0.0594
+  cystic_duct:
+    AP: 0.3288
+  cystic_artery:
+    AP: 0.1812
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0263
+  fluid:
+    AP: 0.7839
+  abdominal_wall_cavity:
+    AP: 0.6410
+  liver:
+    AP: 0.7295
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4991
+  peritoneum:
+    AP: 0.2265
+  gut:
+    AP: 0.0594
+  specimen_bag:
+    AP: 0.9102
+  null_target:
+    AP: 0.2927
+Learning rates: ['0.000085', '0.000085', '0.000850', '0.000850']
+Task weights: {'verb': 0.3263470166031358, 'instrument': 0.2392904819802004, 'target': 0.43436250141666394, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.1965, mAP: 0.6113
+Instrument - Loss: 0.1454, mAP: 0.8701
+Target - Loss: 0.1686, mAP: 0.4344
+Triplet - Loss: 0.0812, mAP: 0.2667
+--------------------------------------------------
+New best triplet mAP: 0.2667
+--------------------------------------------------
+Validation Results - Epoch 2/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3047
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0208
+  grasper,grasp,cystic_duct:
+    AP: 0.1222
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2111
+  grasper,grasp,omentum:
+    AP: 0.0417
+  grasper,grasp,specimen_bag:
+    AP: 0.9103
+  grasper,pack,gallbladder:
+    AP: 0.2041
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9420
+  grasper,retract,gut:
+    AP: 0.1221
+  grasper,retract,liver:
+    AP: 0.7219
+  grasper,retract,omentum:
+    AP: 0.6467
+  grasper,retract,peritoneum:
+    AP: 0.5088
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.7442
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0294
+  bipolar,coagulate,cystic_artery:
+    AP: 0.1465
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0726
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.8992
+  bipolar,coagulate,omentum:
+    AP: 0.6649
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0094
+  bipolar,dissect,cystic_duct:
+    AP: 0.0110
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.0667
+  hook,coagulate,gallbladder:
+    AP: 0.0088
+  hook,coagulate,liver:
+    AP: 0.2361
+  hook,coagulate,omentum:
+    AP: 0.0294
+  hook,dissect,cystic_artery:
+    AP: 0.1724
+  hook,dissect,cystic_duct:
+    AP: 0.2953
+  hook,dissect,cystic_plate:
+    AP: 0.0748
+  hook,dissect,gallbladder:
+    AP: 0.7574
+  hook,dissect,omentum:
+    AP: 0.3070
+  hook,dissect,peritoneum:
+    AP: 0.0056
+  hook,retract,gallbladder:
+    AP: 0.1093
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0215
+  scissors,cut,blood_vessel:
+    AP: 0.1250
+  scissors,cut,cystic_artery:
+    AP: 0.4359
+  scissors,cut,cystic_duct:
+    AP: 0.6422
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0262
+  clipper,clip,blood_vessel:
+    AP: 0.0500
+  clipper,clip,cystic_artery:
+    AP: 0.8831
+  clipper,clip,cystic_duct:
+    AP: 0.3950
+  irrigator,aspirate,fluid:
+    AP: 0.8279
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.0909
+  irrigator,irrigate,liver:
+    AP: 0.0238
+  irrigator,retract,gallbladder:
+    AP: 1.0000
+  irrigator,retract,liver:
+    AP: 0.0808
+  irrigator,retract,omentum:
+    AP: 0.1756
+  grasper,null_verb,null_target:
+    AP: 0.4158
+  bipolar,null_verb,null_target:
+    AP: 0.0357
+  hook,null_verb,null_target:
+    AP: 0.4507
+  scissors,null_verb,null_target:
+    AP: 0.0769
+  clipper,null_verb,null_target:
+    AP: 0.0990
+  irrigator,null_verb,null_target:
+    AP: 0.2869
+INSTRUMENT METRICS:
+  Overall mAP: 0.9159
+  grasper:
+    AP: 0.9828
+  bipolar:
+    AP: 0.8540
+  hook:
+    AP: 0.9452
+  scissors:
+    AP: 0.8902
+  clipper:
+    AP: 0.9324
+  irrigator:
+    AP: 0.8907
+VERB METRICS:
+  Overall mAP: 0.6457
+  grasp:
+    AP: 0.7226
+  retract:
+    AP: 0.9721
+  dissect:
+    AP: 0.8678
+  coagulate:
+    AP: 0.7139
+  clip:
+    AP: 0.9322
+  cut:
+    AP: 0.7918
+  aspirate:
+    AP: 0.8279
+  irrigate:
+    AP: 0.0491
+  pack:
+    AP: 0.2041
+  null_verb:
+    AP: 0.3759
+TARGET METRICS:
+  Overall mAP: 0.4826
+  gallbladder:
+    AP: 0.9582
+  cystic_plate:
+    AP: 0.0451
+  cystic_duct:
+    AP: 0.3663
+  cystic_artery:
+    AP: 0.4741
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0384
+  fluid:
+    AP: 0.8279
+  abdominal_wall_cavity:
+    AP: 0.5827
+  liver:
+    AP: 0.7278
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5648
+  peritoneum:
+    AP: 0.2799
+  gut:
+    AP: 0.1221
+  specimen_bag:
+    AP: 0.9103
+  null_target:
+    AP: 0.3759
+Learning rates: ['0.000099', '0.000099', '0.000995', '0.000995']
+Task weights: {'verb': 0.33176737032135767, 'instrument': 0.2435482968953989, 'target': 0.4246843327832433, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.1370, mAP: 0.6457
+Instrument - Loss: 0.0890, mAP: 0.9159
+Target - Loss: 0.1130, mAP: 0.4826
+Triplet - Loss: 0.0510, mAP: 0.3047
+--------------------------------------------------
+New best triplet mAP: 0.3047
+--------------------------------------------------
+Validation Results - Epoch 3/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3402
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.1336
+  grasper,grasp,cystic_duct:
+    AP: 0.2939
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2532
+  grasper,grasp,omentum:
+    AP: 0.0021
+  grasper,grasp,specimen_bag:
+    AP: 0.9522
+  grasper,pack,gallbladder:
+    AP: 0.2751
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9244
+  grasper,retract,gut:
+    AP: 0.0281
+  grasper,retract,liver:
+    AP: 0.6752
+  grasper,retract,omentum:
+    AP: 0.4157
+  grasper,retract,peritoneum:
+    AP: 0.3850
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9267
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1000
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2667
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0663
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.8819
+  bipolar,coagulate,omentum:
+    AP: 0.6546
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0019
+  bipolar,dissect,cystic_duct:
+    AP: 0.0026
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.0625
+  hook,coagulate,gallbladder:
+    AP: 0.0162
+  hook,coagulate,liver:
+    AP: 0.5159
+  hook,coagulate,omentum:
+    AP: 0.1111
+  hook,dissect,cystic_artery:
+    AP: 0.1614
+  hook,dissect,cystic_duct:
+    AP: 0.2607
+  hook,dissect,cystic_plate:
+    AP: 0.1186
+  hook,dissect,gallbladder:
+    AP: 0.7105
+  hook,dissect,omentum:
+    AP: 0.1772
+  hook,dissect,peritoneum:
+    AP: 0.0127
+  hook,retract,gallbladder:
+    AP: 0.4291
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0042
+  scissors,cut,blood_vessel:
+    AP: 0.0500
+  scissors,cut,cystic_artery:
+    AP: 0.4101
+  scissors,cut,cystic_duct:
+    AP: 0.5811
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0317
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.6301
+  clipper,clip,cystic_duct:
+    AP: 0.5194
+  irrigator,aspirate,fluid:
+    AP: 0.9021
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.0833
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 0.1000
+  irrigator,retract,liver:
+    AP: 0.0696
+  irrigator,retract,omentum:
+    AP: 0.4159
+  grasper,null_verb,null_target:
+    AP: 0.3325
+  bipolar,null_verb,null_target:
+    AP: 0.2071
+  hook,null_verb,null_target:
+    AP: 0.3165
+  scissors,null_verb,null_target:
+    AP: 0.1250
+  clipper,null_verb,null_target:
+    AP: 0.1149
+  irrigator,null_verb,null_target:
+    AP: 0.2994
+INSTRUMENT METRICS:
+  Overall mAP: 0.9073
+  grasper:
+    AP: 0.9817
+  bipolar:
+    AP: 0.9195
+  hook:
+    AP: 0.9499
+  scissors:
+    AP: 0.7022
+  clipper:
+    AP: 0.9830
+  irrigator:
+    AP: 0.9074
+VERB METRICS:
+  Overall mAP: 0.6816
+  grasp:
+    AP: 0.8258
+  retract:
+    AP: 0.9622
+  dissect:
+    AP: 0.8501
+  coagulate:
+    AP: 0.8014
+  clip:
+    AP: 0.9213
+  cut:
+    AP: 0.7926
+  aspirate:
+    AP: 0.9021
+  irrigate:
+    AP: 0.1620
+  pack:
+    AP: 0.2751
+  null_verb:
+    AP: 0.3236
+TARGET METRICS:
+  Overall mAP: 0.4807
+  gallbladder:
+    AP: 0.9431
+  cystic_plate:
+    AP: 0.0764
+  cystic_duct:
+    AP: 0.3239
+  cystic_artery:
+    AP: 0.2965
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3530
+  fluid:
+    AP: 0.9021
+  abdominal_wall_cavity:
+    AP: 0.7025
+  liver:
+    AP: 0.6918
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.3545
+  peritoneum:
+    AP: 0.3012
+  gut:
+    AP: 0.0281
+  specimen_bag:
+    AP: 0.9522
+  null_target:
+    AP: 0.3236
+Learning rates: ['0.000096', '0.000096', '0.000962', '0.000962']
+Task weights: {'verb': 0.32031033527709607, 'instrument': 0.24854914620747692, 'target': 0.431140518515427, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.1153, mAP: 0.6816
+Instrument - Loss: 0.0741, mAP: 0.9073
+Target - Loss: 0.0992, mAP: 0.4807
+Triplet - Loss: 0.0413, mAP: 0.3402
+--------------------------------------------------
+New best triplet mAP: 0.3402
+--------------------------------------------------
+Validation Results - Epoch 4/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3288
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0483
+  grasper,grasp,cystic_duct:
+    AP: 0.0777
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1427
+  grasper,grasp,omentum:
+    AP: 1.0000
+  grasper,grasp,specimen_bag:
+    AP: 0.9290
+  grasper,pack,gallbladder:
+    AP: 0.1581
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9220
+  grasper,retract,gut:
+    AP: 0.1498
+  grasper,retract,liver:
+    AP: 0.7699
+  grasper,retract,omentum:
+    AP: 0.6156
+  grasper,retract,peritoneum:
+    AP: 0.1513
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.6090
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1000
+  bipolar,coagulate,cystic_artery:
+    AP: 0.4167
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1468
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9782
+  bipolar,coagulate,omentum:
+    AP: 0.9594
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0067
+  bipolar,dissect,cystic_duct:
+    AP: 0.0023
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.0312
+  hook,coagulate,gallbladder:
+    AP: 0.0060
+  hook,coagulate,liver:
+    AP: 0.0803
+  hook,coagulate,omentum:
+    AP: 0.0526
+  hook,dissect,cystic_artery:
+    AP: 0.1745
+  hook,dissect,cystic_duct:
+    AP: 0.3400
+  hook,dissect,cystic_plate:
+    AP: 0.3043
+  hook,dissect,gallbladder:
+    AP: 0.8034
+  hook,dissect,omentum:
+    AP: 0.2612
+  hook,dissect,peritoneum:
+    AP: 0.0244
+  hook,retract,gallbladder:
+    AP: 0.3791
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0082
+  scissors,cut,blood_vessel:
+    AP: 0.0625
+  scissors,cut,cystic_artery:
+    AP: 0.5920
+  scissors,cut,cystic_duct:
+    AP: 0.5277
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0818
+  clipper,clip,blood_vessel:
+    AP: 0.0833
+  clipper,clip,cystic_artery:
+    AP: 0.7249
+  clipper,clip,cystic_duct:
+    AP: 0.5297
+  irrigator,aspirate,fluid:
+    AP: 0.9044
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1667
+  irrigator,irrigate,liver:
+    AP: 0.0769
+  irrigator,retract,gallbladder:
+    AP: 0.2500
+  irrigator,retract,liver:
+    AP: 0.0471
+  irrigator,retract,omentum:
+    AP: 0.0288
+  grasper,null_verb,null_target:
+    AP: 0.4587
+  bipolar,null_verb,null_target:
+    AP: 0.0917
+  hook,null_verb,null_target:
+    AP: 0.5148
+  scissors,null_verb,null_target:
+    AP: 0.3333
+  clipper,null_verb,null_target:
+    AP: 0.0842
+  irrigator,null_verb,null_target:
+    AP: 0.2308
+INSTRUMENT METRICS:
+  Overall mAP: 0.9410
+  grasper:
+    AP: 0.9839
+  bipolar:
+    AP: 0.9500
+  hook:
+    AP: 0.9583
+  scissors:
+    AP: 0.8510
+  clipper:
+    AP: 0.9791
+  irrigator:
+    AP: 0.9236
+VERB METRICS:
+  Overall mAP: 0.6828
+  grasp:
+    AP: 0.7905
+  retract:
+    AP: 0.9621
+  dissect:
+    AP: 0.8939
+  coagulate:
+    AP: 0.8569
+  clip:
+    AP: 0.9268
+  cut:
+    AP: 0.8783
+  aspirate:
+    AP: 0.9044
+  irrigate:
+    AP: 0.0733
+  pack:
+    AP: 0.1581
+  null_verb:
+    AP: 0.3839
+TARGET METRICS:
+  Overall mAP: 0.5030
+  gallbladder:
+    AP: 0.9380
+  cystic_plate:
+    AP: 0.2649
+  cystic_duct:
+    AP: 0.3749
+  cystic_artery:
+    AP: 0.4413
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0536
+  fluid:
+    AP: 0.9044
+  abdominal_wall_cavity:
+    AP: 0.3823
+  liver:
+    AP: 0.8043
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4932
+  peritoneum:
+    AP: 0.4190
+  gut:
+    AP: 0.1498
+  specimen_bag:
+    AP: 0.9290
+  null_target:
+    AP: 0.3839
+Learning rates: ['0.000090', '0.000090', '0.000901', '0.000901']
+Task weights: {'verb': 0.32783681288724054, 'instrument': 0.24654397557060878, 'target': 0.4256192115421507, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0975, mAP: 0.6828
+Instrument - Loss: 0.0604, mAP: 0.9410
+Target - Loss: 0.0867, mAP: 0.5030
+Triplet - Loss: 0.0357, mAP: 0.3288
+--------------------------------------------------
+Validation Results - Epoch 5/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3269
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0104
+  grasper,grasp,cystic_duct:
+    AP: 0.1809
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1934
+  grasper,grasp,omentum:
+    AP: 0.0022
+  grasper,grasp,specimen_bag:
+    AP: 0.9594
+  grasper,pack,gallbladder:
+    AP: 0.2333
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9522
+  grasper,retract,gut:
+    AP: 0.1037
+  grasper,retract,liver:
+    AP: 0.8213
+  grasper,retract,omentum:
+    AP: 0.5249
+  grasper,retract,peritoneum:
+    AP: 0.0754
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.6672
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0417
+  bipolar,coagulate,cystic_artery:
+    AP: 0.5833
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0869
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9757
+  bipolar,coagulate,omentum:
+    AP: 0.8701
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0417
+  bipolar,dissect,cystic_duct:
+    AP: 0.0056
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.3333
+  hook,coagulate,gallbladder:
+    AP: 0.0117
+  hook,coagulate,liver:
+    AP: 0.0298
+  hook,coagulate,omentum:
+    AP: 0.0208
+  hook,dissect,cystic_artery:
+    AP: 0.2297
+  hook,dissect,cystic_duct:
+    AP: 0.4349
+  hook,dissect,cystic_plate:
+    AP: 0.2182
+  hook,dissect,gallbladder:
+    AP: 0.8062
+  hook,dissect,omentum:
+    AP: 0.2267
+  hook,dissect,peritoneum:
+    AP: 0.0200
+  hook,retract,gallbladder:
+    AP: 0.2847
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0164
+  scissors,cut,blood_vessel:
+    AP: 0.0625
+  scissors,cut,cystic_artery:
+    AP: 0.5325
+  scissors,cut,cystic_duct:
+    AP: 0.4169
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0228
+  clipper,clip,blood_vessel:
+    AP: 0.0833
+  clipper,clip,cystic_artery:
+    AP: 0.5692
+  clipper,clip,cystic_duct:
+    AP: 0.5906
+  irrigator,aspirate,fluid:
+    AP: 0.8800
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.0714
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 0.2500
+  irrigator,retract,liver:
+    AP: 0.0592
+  irrigator,retract,omentum:
+    AP: 0.0701
+  grasper,null_verb,null_target:
+    AP: 0.4551
+  bipolar,null_verb,null_target:
+    AP: 0.3167
+  hook,null_verb,null_target:
+    AP: 0.4836
+  scissors,null_verb,null_target:
+    AP: 0.1000
+  clipper,null_verb,null_target:
+    AP: 0.0595
+  irrigator,null_verb,null_target:
+    AP: 0.3591
+INSTRUMENT METRICS:
+  Overall mAP: 0.9185
+  grasper:
+    AP: 0.9911
+  bipolar:
+    AP: 0.9581
+  hook:
+    AP: 0.9663
+  scissors:
+    AP: 0.7109
+  clipper:
+    AP: 0.9597
+  irrigator:
+    AP: 0.9251
+VERB METRICS:
+  Overall mAP: 0.6840
+  grasp:
+    AP: 0.8327
+  retract:
+    AP: 0.9811
+  dissect:
+    AP: 0.8995
+  coagulate:
+    AP: 0.8148
+  clip:
+    AP: 0.8685
+  cut:
+    AP: 0.7603
+  aspirate:
+    AP: 0.8800
+  irrigate:
+    AP: 0.1270
+  pack:
+    AP: 0.2333
+  null_verb:
+    AP: 0.4431
+TARGET METRICS:
+  Overall mAP: 0.4633
+  gallbladder:
+    AP: 0.9586
+  cystic_plate:
+    AP: 0.0725
+  cystic_duct:
+    AP: 0.5069
+  cystic_artery:
+    AP: 0.4201
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0472
+  fluid:
+    AP: 0.8800
+  abdominal_wall_cavity:
+    AP: 0.2789
+  liver:
+    AP: 0.8366
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4596
+  peritoneum:
+    AP: 0.0568
+  gut:
+    AP: 0.1037
+  specimen_bag:
+    AP: 0.9594
+  null_target:
+    AP: 0.4431
+Learning rates: ['0.000082', '0.000082', '0.000815', '0.000815']
+Task weights: {'verb': 0.3163004141429434, 'instrument': 0.2434785555062445, 'target': 0.4402210303508122, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0820, mAP: 0.6840
+Instrument - Loss: 0.0457, mAP: 0.9185
+Target - Loss: 0.0745, mAP: 0.4633
+Triplet - Loss: 0.0314, mAP: 0.3269
+--------------------------------------------------
+Validation Results - Epoch 6/14:
+TRIPLET METRICS:
+  Overall mAP: 0.4111
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.1296
+  grasper,grasp,cystic_duct:
+    AP: 0.0175
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2582
+  grasper,grasp,omentum:
+    AP: 0.0028
+  grasper,grasp,specimen_bag:
+    AP: 0.9210
+  grasper,pack,gallbladder:
+    AP: 0.2975
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9544
+  grasper,retract,gut:
+    AP: 0.1913
+  grasper,retract,liver:
+    AP: 0.8040
+  grasper,retract,omentum:
+    AP: 0.5563
+  grasper,retract,peritoneum:
+    AP: 0.5671
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 1.0000
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0323
+  bipolar,coagulate,cystic_artery:
+    AP: 0.5132
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1055
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.8755
+  bipolar,coagulate,omentum:
+    AP: 0.7878
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0256
+  bipolar,dissect,cystic_duct:
+    AP: 0.0067
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0081
+  hook,coagulate,liver:
+    AP: 0.0191
+  hook,coagulate,omentum:
+    AP: 0.0476
+  hook,dissect,cystic_artery:
+    AP: 0.2026
+  hook,dissect,cystic_duct:
+    AP: 0.3488
+  hook,dissect,cystic_plate:
+    AP: 0.1247
+  hook,dissect,gallbladder:
+    AP: 0.8053
+  hook,dissect,omentum:
+    AP: 0.2050
+  hook,dissect,peritoneum:
+    AP: 0.0667
+  hook,retract,gallbladder:
+    AP: 0.6193
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0533
+  scissors,cut,blood_vessel:
+    AP: 0.0909
+  scissors,cut,cystic_artery:
+    AP: 0.5093
+  scissors,cut,cystic_duct:
+    AP: 0.5470
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.1761
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.5322
+  clipper,clip,cystic_duct:
+    AP: 0.6299
+  irrigator,aspirate,fluid:
+    AP: 0.8337
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 1.0000
+  irrigator,retract,liver:
+    AP: 0.1119
+  irrigator,retract,omentum:
+    AP: 0.0217
+  grasper,null_verb,null_target:
+    AP: 0.3230
+  bipolar,null_verb,null_target:
+    AP: 0.0748
+  hook,null_verb,null_target:
+    AP: 0.4211
+  scissors,null_verb,null_target:
+    AP: 0.5000
+  clipper,null_verb,null_target:
+    AP: 0.0841
+  irrigator,null_verb,null_target:
+    AP: 0.1544
+INSTRUMENT METRICS:
+  Overall mAP: 0.9196
+  grasper:
+    AP: 0.9869
+  bipolar:
+    AP: 0.9325
+  hook:
+    AP: 0.9677
+  scissors:
+    AP: 0.8443
+  clipper:
+    AP: 0.9763
+  irrigator:
+    AP: 0.8098
+VERB METRICS:
+  Overall mAP: 0.7726
+  grasp:
+    AP: 0.7880
+  retract:
+    AP: 0.9748
+  dissect:
+    AP: 0.8987
+  coagulate:
+    AP: 0.8522
+  clip:
+    AP: 0.8879
+  cut:
+    AP: 0.9288
+  aspirate:
+    AP: 0.8337
+  irrigate:
+    AP: 1.0000
+  pack:
+    AP: 0.2975
+  null_verb:
+    AP: 0.2643
+TARGET METRICS:
+  Overall mAP: 0.5145
+  gallbladder:
+    AP: 0.9619
+  cystic_plate:
+    AP: 0.1034
+  cystic_duct:
+    AP: 0.3412
+  cystic_artery:
+    AP: 0.3772
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3546
+  fluid:
+    AP: 0.8337
+  abdominal_wall_cavity:
+    AP: 0.6046
+  liver:
+    AP: 0.8140
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4446
+  peritoneum:
+    AP: 0.4766
+  gut:
+    AP: 0.1913
+  specimen_bag:
+    AP: 0.9210
+  null_target:
+    AP: 0.2643
+Learning rates: ['0.000071', '0.000071', '0.000712', '0.000712']
+Task weights: {'verb': 0.3052634114532846, 'instrument': 0.2612582481624022, 'target': 0.43347834038431315, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0677, mAP: 0.7726
+Instrument - Loss: 0.0375, mAP: 0.9196
+Target - Loss: 0.0611, mAP: 0.5145
+Triplet - Loss: 0.0273, mAP: 0.4111
+--------------------------------------------------
+New best triplet mAP: 0.4111
+--------------------------------------------------
+Validation Results - Epoch 7/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3765
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0242
+  grasper,grasp,cystic_duct:
+    AP: 0.2186
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2601
+  grasper,grasp,omentum:
+    AP: 0.0037
+  grasper,grasp,specimen_bag:
+    AP: 0.9343
+  grasper,pack,gallbladder:
+    AP: 0.3666
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9544
+  grasper,retract,gut:
+    AP: 0.0646
+  grasper,retract,liver:
+    AP: 0.8023
+  grasper,retract,omentum:
+    AP: 0.6262
+  grasper,retract,peritoneum:
+    AP: 0.4465
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8111
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0455
+  bipolar,coagulate,cystic_artery:
+    AP: 0.5833
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0686
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9358
+  bipolar,coagulate,omentum:
+    AP: 0.7730
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0135
+  bipolar,dissect,cystic_duct:
+    AP: 0.0067
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0656
+  hook,coagulate,liver:
+    AP: 0.0098
+  hook,coagulate,omentum:
+    AP: 0.1250
+  hook,dissect,cystic_artery:
+    AP: 0.2368
+  hook,dissect,cystic_duct:
+    AP: 0.4020
+  hook,dissect,cystic_plate:
+    AP: 0.2272
+  hook,dissect,gallbladder:
+    AP: 0.7914
+  hook,dissect,omentum:
+    AP: 0.2414
+  hook,dissect,peritoneum:
+    AP: 0.0175
+  hook,retract,gallbladder:
+    AP: 0.5997
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0333
+  scissors,cut,blood_vessel:
+    AP: 0.0064
+  scissors,cut,cystic_artery:
+    AP: 0.6273
+  scissors,cut,cystic_duct:
+    AP: 0.5370
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0209
+  clipper,clip,blood_vessel:
+    AP: 0.0833
+  clipper,clip,cystic_artery:
+    AP: 0.6374
+  clipper,clip,cystic_duct:
+    AP: 0.8184
+  irrigator,aspirate,fluid:
+    AP: 0.9036
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1000
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 0.3333
+  irrigator,retract,liver:
+    AP: 0.0368
+  irrigator,retract,omentum:
+    AP: 0.0469
+  grasper,null_verb,null_target:
+    AP: 0.4354
+  bipolar,null_verb,null_target:
+    AP: 0.2566
+  hook,null_verb,null_target:
+    AP: 0.3786
+  scissors,null_verb,null_target:
+    AP: 0.3333
+  clipper,null_verb,null_target:
+    AP: 0.0852
+  irrigator,null_verb,null_target:
+    AP: 0.4980
+INSTRUMENT METRICS:
+  Overall mAP: 0.9323
+  grasper:
+    AP: 0.9887
+  bipolar:
+    AP: 0.9477
+  hook:
+    AP: 0.9632
+  scissors:
+    AP: 0.7814
+  clipper:
+    AP: 0.9950
+  irrigator:
+    AP: 0.9180
+VERB METRICS:
+  Overall mAP: 0.7577
+  grasp:
+    AP: 0.8095
+  retract:
+    AP: 0.9806
+  dissect:
+    AP: 0.9009
+  coagulate:
+    AP: 0.8837
+  clip:
+    AP: 0.9414
+  cut:
+    AP: 0.8264
+  aspirate:
+    AP: 0.9036
+  irrigate:
+    AP: 0.5357
+  pack:
+    AP: 0.3666
+  null_verb:
+    AP: 0.4289
+TARGET METRICS:
+  Overall mAP: 0.5031
+  gallbladder:
+    AP: 0.9566
+  cystic_plate:
+    AP: 0.0629
+  cystic_duct:
+    AP: 0.4988
+  cystic_artery:
+    AP: 0.4228
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0411
+  fluid:
+    AP: 0.9036
+  abdominal_wall_cavity:
+    AP: 0.6773
+  liver:
+    AP: 0.8076
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4976
+  peritoneum:
+    AP: 0.2444
+  gut:
+    AP: 0.0646
+  specimen_bag:
+    AP: 0.9343
+  null_target:
+    AP: 0.4289
+Learning rates: ['0.000060', '0.000060', '0.000595', '0.000595']
+Task weights: {'verb': 0.3074099253834573, 'instrument': 0.2554186821587328, 'target': 0.43717139245780995, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0508, mAP: 0.7577
+Instrument - Loss: 0.0241, mAP: 0.9323
+Target - Loss: 0.0512, mAP: 0.5031
+Triplet - Loss: 0.0236, mAP: 0.3765
+--------------------------------------------------
+Validation Results - Epoch 8/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3659
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0391
+  grasper,grasp,cystic_duct:
+    AP: 0.0428
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1613
+  grasper,grasp,omentum:
+    AP: 0.0056
+  grasper,grasp,specimen_bag:
+    AP: 0.9254
+  grasper,pack,gallbladder:
+    AP: 0.2811
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9592
+  grasper,retract,gut:
+    AP: 0.3439
+  grasper,retract,liver:
+    AP: 0.8450
+  grasper,retract,omentum:
+    AP: 0.6181
+  grasper,retract,peritoneum:
+    AP: 0.5506
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 1.0000
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0303
+  bipolar,coagulate,cystic_artery:
+    AP: 0.8333
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0713
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9662
+  bipolar,coagulate,omentum:
+    AP: 0.6177
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0233
+  bipolar,dissect,cystic_duct:
+    AP: 0.0085
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.2000
+  hook,coagulate,gallbladder:
+    AP: 0.0329
+  hook,coagulate,liver:
+    AP: 0.0450
+  hook,coagulate,omentum:
+    AP: 0.0250
+  hook,dissect,cystic_artery:
+    AP: 0.2663
+  hook,dissect,cystic_duct:
+    AP: 0.3919
+  hook,dissect,cystic_plate:
+    AP: 0.3341
+  hook,dissect,gallbladder:
+    AP: 0.8127
+  hook,dissect,omentum:
+    AP: 0.3200
+  hook,dissect,peritoneum:
+    AP: 0.0238
+  hook,retract,gallbladder:
+    AP: 0.5155
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0153
+  scissors,cut,blood_vessel:
+    AP: 0.0080
+  scissors,cut,cystic_artery:
+    AP: 0.4839
+  scissors,cut,cystic_duct:
+    AP: 0.6795
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0174
+  clipper,clip,blood_vessel:
+    AP: 0.3333
+  clipper,clip,cystic_artery:
+    AP: 0.6638
+  clipper,clip,cystic_duct:
+    AP: 0.8349
+  irrigator,aspirate,fluid:
+    AP: 0.8840
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 0.2000
+  irrigator,retract,gallbladder:
+    AP: 0.2000
+  irrigator,retract,liver:
+    AP: 0.0855
+  irrigator,retract,omentum:
+    AP: 0.0789
+  grasper,null_verb,null_target:
+    AP: 0.5299
+  bipolar,null_verb,null_target:
+    AP: 0.0618
+  hook,null_verb,null_target:
+    AP: 0.3435
+  scissors,null_verb,null_target:
+    AP: 0.0769
+  clipper,null_verb,null_target:
+    AP: 0.0827
+  irrigator,null_verb,null_target:
+    AP: 0.4279
+INSTRUMENT METRICS:
+  Overall mAP: 0.9326
+  grasper:
+    AP: 0.9879
+  bipolar:
+    AP: 0.9580
+  hook:
+    AP: 0.9588
+  scissors:
+    AP: 0.8368
+  clipper:
+    AP: 0.9766
+  irrigator:
+    AP: 0.8774
+VERB METRICS:
+  Overall mAP: 0.7227
+  grasp:
+    AP: 0.7883
+  retract:
+    AP: 0.9765
+  dissect:
+    AP: 0.9110
+  coagulate:
+    AP: 0.9022
+  clip:
+    AP: 0.9724
+  cut:
+    AP: 0.8179
+  aspirate:
+    AP: 0.8840
+  irrigate:
+    AP: 0.2778
+  pack:
+    AP: 0.2811
+  null_verb:
+    AP: 0.4159
+TARGET METRICS:
+  Overall mAP: 0.5800
+  gallbladder:
+    AP: 0.9640
+  cystic_plate:
+    AP: 0.1542
+  cystic_duct:
+    AP: 0.5831
+  cystic_artery:
+    AP: 0.4537
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0615
+  fluid:
+    AP: 0.8840
+  abdominal_wall_cavity:
+    AP: 0.9333
+  liver:
+    AP: 0.8435
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5356
+  peritoneum:
+    AP: 0.4420
+  gut:
+    AP: 0.3439
+  specimen_bag:
+    AP: 0.9254
+  null_target:
+    AP: 0.4159
+Learning rates: ['0.000047', '0.000047', '0.000473', '0.000473']
+Task weights: {'verb': 0.3326015837889351, 'instrument': 0.2650038999183454, 'target': 0.40239451629271955, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0417, mAP: 0.7227
+Instrument - Loss: 0.0201, mAP: 0.9326
+Target - Loss: 0.0400, mAP: 0.5800
+Triplet - Loss: 0.0209, mAP: 0.3659
+--------------------------------------------------
+Validation Results - Epoch 9/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3715
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.1708
+  grasper,grasp,cystic_duct:
+    AP: 0.0283
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2754
+  grasper,grasp,omentum:
+    AP: 0.0042
+  grasper,grasp,specimen_bag:
+    AP: 0.9396
+  grasper,pack,gallbladder:
+    AP: 0.4362
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9650
+  grasper,retract,gut:
+    AP: 0.1926
+  grasper,retract,liver:
+    AP: 0.8074
+  grasper,retract,omentum:
+    AP: 0.6117
+  grasper,retract,peritoneum:
+    AP: 0.4060
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9267
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0909
+  bipolar,coagulate,cystic_artery:
+    AP: 1.0000
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0714
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9329
+  bipolar,coagulate,omentum:
+    AP: 0.7560
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0714
+  bipolar,dissect,cystic_duct:
+    AP: 0.0073
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.3333
+  hook,coagulate,gallbladder:
+    AP: 0.1964
+  hook,coagulate,liver:
+    AP: 0.0374
+  hook,coagulate,omentum:
+    AP: 0.0080
+  hook,dissect,cystic_artery:
+    AP: 0.3154
+  hook,dissect,cystic_duct:
+    AP: 0.4219
+  hook,dissect,cystic_plate:
+    AP: 0.2541
+  hook,dissect,gallbladder:
+    AP: 0.8052
+  hook,dissect,omentum:
+    AP: 0.3328
+  hook,dissect,peritoneum:
+    AP: 0.0270
+  hook,retract,gallbladder:
+    AP: 0.4483
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0342
+  scissors,cut,blood_vessel:
+    AP: 0.0032
+  scissors,cut,cystic_artery:
+    AP: 0.5678
+  scissors,cut,cystic_duct:
+    AP: 0.4421
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0317
+  clipper,clip,blood_vessel:
+    AP: 0.1000
+  clipper,clip,cystic_artery:
+    AP: 0.7063
+  clipper,clip,cystic_duct:
+    AP: 0.8272
+  irrigator,aspirate,fluid:
+    AP: 0.9042
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1429
+  irrigator,irrigate,liver:
+    AP: 0.5000
+  irrigator,retract,gallbladder:
+    AP: 0.3333
+  irrigator,retract,liver:
+    AP: 0.0804
+  irrigator,retract,omentum:
+    AP: 0.0745
+  grasper,null_verb,null_target:
+    AP: 0.5118
+  bipolar,null_verb,null_target:
+    AP: 0.0627
+  hook,null_verb,null_target:
+    AP: 0.5639
+  scissors,null_verb,null_target:
+    AP: 0.0833
+  clipper,null_verb,null_target:
+    AP: 0.0447
+  irrigator,null_verb,null_target:
+    AP: 0.6886
+INSTRUMENT METRICS:
+  Overall mAP: 0.9481
+  grasper:
+    AP: 0.9896
+  bipolar:
+    AP: 0.9618
+  hook:
+    AP: 0.9632
+  scissors:
+    AP: 0.8307
+  clipper:
+    AP: 0.9966
+  irrigator:
+    AP: 0.9469
+VERB METRICS:
+  Overall mAP: 0.7385
+  grasp:
+    AP: 0.7707
+  retract:
+    AP: 0.9823
+  dissect:
+    AP: 0.9025
+  coagulate:
+    AP: 0.8811
+  clip:
+    AP: 0.9587
+  cut:
+    AP: 0.8106
+  aspirate:
+    AP: 0.9042
+  irrigate:
+    AP: 0.2111
+  pack:
+    AP: 0.4362
+  null_verb:
+    AP: 0.5274
+TARGET METRICS:
+  Overall mAP: 0.5415
+  gallbladder:
+    AP: 0.9639
+  cystic_plate:
+    AP: 0.1620
+  cystic_duct:
+    AP: 0.5765
+  cystic_artery:
+    AP: 0.4847
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0460
+  fluid:
+    AP: 0.9042
+  abdominal_wall_cavity:
+    AP: 0.6287
+  liver:
+    AP: 0.8273
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5263
+  peritoneum:
+    AP: 0.2607
+  gut:
+    AP: 0.1926
+  specimen_bag:
+    AP: 0.9396
+  null_target:
+    AP: 0.5274
+Learning rates: ['0.000035', '0.000035', '0.000354', '0.000354']
+Task weights: {'verb': 0.3218586511117655, 'instrument': 0.25748077963461646, 'target': 0.42066056925361806, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0343, mAP: 0.7385
+Instrument - Loss: 0.0167, mAP: 0.9481
+Target - Loss: 0.0316, mAP: 0.5415
+Triplet - Loss: 0.0180, mAP: 0.3715
+--------------------------------------------------
+Validation Results - Epoch 10/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3782
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0126
+  grasper,grasp,cystic_duct:
+    AP: 0.2909
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2417
+  grasper,grasp,omentum:
+    AP: 0.0076
+  grasper,grasp,specimen_bag:
+    AP: 0.9437
+  grasper,pack,gallbladder:
+    AP: 0.3426
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9682
+  grasper,retract,gut:
+    AP: 0.1696
+  grasper,retract,liver:
+    AP: 0.8483
+  grasper,retract,omentum:
+    AP: 0.6688
+  grasper,retract,peritoneum:
+    AP: 0.1886
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 1.0000
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1250
+  bipolar,coagulate,cystic_artery:
+    AP: 0.7500
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0634
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9946
+  bipolar,coagulate,omentum:
+    AP: 0.7989
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.1000
+  bipolar,dissect,cystic_duct:
+    AP: 0.0476
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.3333
+  hook,coagulate,gallbladder:
+    AP: 0.0062
+  hook,coagulate,liver:
+    AP: 0.0044
+  hook,coagulate,omentum:
+    AP: 0.0156
+  hook,dissect,cystic_artery:
+    AP: 0.3337
+  hook,dissect,cystic_duct:
+    AP: 0.4239
+  hook,dissect,cystic_plate:
+    AP: 0.2804
+  hook,dissect,gallbladder:
+    AP: 0.8467
+  hook,dissect,omentum:
+    AP: 0.3483
+  hook,dissect,peritoneum:
+    AP: 0.0112
+  hook,retract,gallbladder:
+    AP: 0.5348
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0488
+  scissors,cut,blood_vessel:
+    AP: 0.0018
+  scissors,cut,cystic_artery:
+    AP: 0.5539
+  scissors,cut,cystic_duct:
+    AP: 0.6752
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0587
+  clipper,clip,blood_vessel:
+    AP: 0.1250
+  clipper,clip,cystic_artery:
+    AP: 0.6968
+  clipper,clip,cystic_duct:
+    AP: 0.8762
+  irrigator,aspirate,fluid:
+    AP: 0.8903
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1000
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 0.2500
+  irrigator,retract,liver:
+    AP: 0.0884
+  irrigator,retract,omentum:
+    AP: 0.0623
+  grasper,null_verb,null_target:
+    AP: 0.5179
+  bipolar,null_verb,null_target:
+    AP: 0.0600
+  hook,null_verb,null_target:
+    AP: 0.5756
+  scissors,null_verb,null_target:
+    AP: 0.1250
+  clipper,null_verb,null_target:
+    AP: 0.1196
+  irrigator,null_verb,null_target:
+    AP: 0.3811
+INSTRUMENT METRICS:
+  Overall mAP: 0.9488
+  grasper:
+    AP: 0.9909
+  bipolar:
+    AP: 0.9489
+  hook:
+    AP: 0.9666
+  scissors:
+    AP: 0.8729
+  clipper:
+    AP: 0.9887
+  irrigator:
+    AP: 0.9248
+VERB METRICS:
+  Overall mAP: 0.7833
+  grasp:
+    AP: 0.8278
+  retract:
+    AP: 0.9834
+  dissect:
+    AP: 0.9015
+  coagulate:
+    AP: 0.8925
+  clip:
+    AP: 0.9734
+  cut:
+    AP: 0.9364
+  aspirate:
+    AP: 0.8903
+  irrigate:
+    AP: 0.5526
+  pack:
+    AP: 0.3426
+  null_verb:
+    AP: 0.5321
+TARGET METRICS:
+  Overall mAP: 0.5628
+  gallbladder:
+    AP: 0.9690
+  cystic_plate:
+    AP: 0.1989
+  cystic_duct:
+    AP: 0.6320
+  cystic_artery:
+    AP: 0.4924
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0692
+  fluid:
+    AP: 0.8903
+  abdominal_wall_cavity:
+    AP: 0.8079
+  liver:
+    AP: 0.8553
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5852
+  peritoneum:
+    AP: 0.1707
+  gut:
+    AP: 0.1696
+  specimen_bag:
+    AP: 0.9437
+  null_target:
+    AP: 0.5321
+Learning rates: ['0.000024', '0.000024', '0.000244', '0.000244']
+Task weights: {'verb': 0.3149799837357957, 'instrument': 0.2652687557018713, 'target': 0.419751260562333, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0246, mAP: 0.7833
+Instrument - Loss: 0.0115, mAP: 0.9488
+Target - Loss: 0.0246, mAP: 0.5628
+Triplet - Loss: 0.0160, mAP: 0.3782
+--------------------------------------------------
+Validation Results - Epoch 11/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3770
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0134
+  grasper,grasp,cystic_duct:
+    AP: 0.3068
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2598
+  grasper,grasp,omentum:
+    AP: 0.0034
+  grasper,grasp,specimen_bag:
+    AP: 0.9566
+  grasper,pack,gallbladder:
+    AP: 0.4382
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9646
+  grasper,retract,gut:
+    AP: 0.2070
+  grasper,retract,liver:
+    AP: 0.8436
+  grasper,retract,omentum:
+    AP: 0.6060
+  grasper,retract,peritoneum:
+    AP: 0.3512
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9667
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0769
+  bipolar,coagulate,cystic_artery:
+    AP: 0.7500
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0689
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9721
+  bipolar,coagulate,omentum:
+    AP: 0.7086
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0769
+  bipolar,dissect,cystic_duct:
+    AP: 0.0385
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.3333
+  hook,coagulate,gallbladder:
+    AP: 0.0217
+  hook,coagulate,liver:
+    AP: 0.0027
+  hook,coagulate,omentum:
+    AP: 0.0141
+  hook,dissect,cystic_artery:
+    AP: 0.3254
+  hook,dissect,cystic_duct:
+    AP: 0.4323
+  hook,dissect,cystic_plate:
+    AP: 0.2369
+  hook,dissect,gallbladder:
+    AP: 0.8573
+  hook,dissect,omentum:
+    AP: 0.3048
+  hook,dissect,peritoneum:
+    AP: 0.0154
+  hook,retract,gallbladder:
+    AP: 0.6742
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0291
+  scissors,cut,blood_vessel:
+    AP: 0.0028
+  scissors,cut,cystic_artery:
+    AP: 0.5849
+  scissors,cut,cystic_duct:
+    AP: 0.8104
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0502
+  clipper,clip,blood_vessel:
+    AP: 0.1667
+  clipper,clip,cystic_artery:
+    AP: 0.7122
+  clipper,clip,cystic_duct:
+    AP: 0.8287
+  irrigator,aspirate,fluid:
+    AP: 0.9167
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.0909
+  irrigator,irrigate,liver:
+    AP: 0.3333
+  irrigator,retract,gallbladder:
+    AP: 0.3333
+  irrigator,retract,liver:
+    AP: 0.0906
+  irrigator,retract,omentum:
+    AP: 0.0900
+  grasper,null_verb,null_target:
+    AP: 0.5465
+  bipolar,null_verb,null_target:
+    AP: 0.0653
+  hook,null_verb,null_target:
+    AP: 0.5216
+  scissors,null_verb,null_target:
+    AP: 0.0526
+  clipper,null_verb,null_target:
+    AP: 0.2004
+  irrigator,null_verb,null_target:
+    AP: 0.5966
+INSTRUMENT METRICS:
+  Overall mAP: 0.9572
+  grasper:
+    AP: 0.9922
+  bipolar:
+    AP: 0.9586
+  hook:
+    AP: 0.9691
+  scissors:
+    AP: 0.8850
+  clipper:
+    AP: 0.9930
+  irrigator:
+    AP: 0.9454
+VERB METRICS:
+  Overall mAP: 0.7568
+  grasp:
+    AP: 0.8301
+  retract:
+    AP: 0.9848
+  dissect:
+    AP: 0.9209
+  coagulate:
+    AP: 0.8854
+  clip:
+    AP: 0.9734
+  cut:
+    AP: 0.9134
+  aspirate:
+    AP: 0.9167
+  irrigate:
+    AP: 0.2011
+  pack:
+    AP: 0.4382
+  null_verb:
+    AP: 0.5039
+TARGET METRICS:
+  Overall mAP: 0.5578
+  gallbladder:
+    AP: 0.9686
+  cystic_plate:
+    AP: 0.1717
+  cystic_duct:
+    AP: 0.6087
+  cystic_artery:
+    AP: 0.5019
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0607
+  fluid:
+    AP: 0.9167
+  abdominal_wall_cavity:
+    AP: 0.6915
+  liver:
+    AP: 0.8505
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5260
+  peritoneum:
+    AP: 0.2873
+  gut:
+    AP: 0.2070
+  specimen_bag:
+    AP: 0.9566
+  null_target:
+    AP: 0.5039
+Learning rates: ['0.000015', '0.000015', '0.000151', '0.000151']
+Task weights: {'verb': 0.32123680067306937, 'instrument': 0.26033335846730404, 'target': 0.4184298408596266, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0174, mAP: 0.7568
+Instrument - Loss: 0.0069, mAP: 0.9572
+Target - Loss: 0.0173, mAP: 0.5578
+Triplet - Loss: 0.0138, mAP: 0.3770
+--------------------------------------------------
+Validation Results - Epoch 12/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3892
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0127
+  grasper,grasp,cystic_duct:
+    AP: 0.2091
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1190
+  grasper,grasp,omentum:
+    AP: 0.0028
+  grasper,grasp,specimen_bag:
+    AP: 0.9574
+  grasper,pack,gallbladder:
+    AP: 0.3655
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9679
+  grasper,retract,gut:
+    AP: 0.3348
+  grasper,retract,liver:
+    AP: 0.8567
+  grasper,retract,omentum:
+    AP: 0.6532
+  grasper,retract,peritoneum:
+    AP: 0.3061
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.7389
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1429
+  bipolar,coagulate,cystic_artery:
+    AP: 0.7000
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0810
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9894
+  bipolar,coagulate,omentum:
+    AP: 0.8201
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0130
+  bipolar,dissect,cystic_duct:
+    AP: 0.0227
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.3333
+  hook,coagulate,gallbladder:
+    AP: 0.1417
+  hook,coagulate,liver:
+    AP: 0.0022
+  hook,coagulate,omentum:
+    AP: 0.0087
+  hook,dissect,cystic_artery:
+    AP: 0.3216
+  hook,dissect,cystic_duct:
+    AP: 0.4333
+  hook,dissect,cystic_plate:
+    AP: 0.2545
+  hook,dissect,gallbladder:
+    AP: 0.8526
+  hook,dissect,omentum:
+    AP: 0.3291
+  hook,dissect,peritoneum:
+    AP: 0.0385
+  hook,retract,gallbladder:
+    AP: 0.8214
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0331
+  scissors,cut,blood_vessel:
+    AP: 0.0030
+  scissors,cut,cystic_artery:
+    AP: 0.6006
+  scissors,cut,cystic_duct:
+    AP: 0.7026
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0283
+  clipper,clip,blood_vessel:
+    AP: 0.1111
+  clipper,clip,cystic_artery:
+    AP: 0.6760
+  clipper,clip,cystic_duct:
+    AP: 0.8400
+  irrigator,aspirate,fluid:
+    AP: 0.8936
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.2500
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 0.3333
+  irrigator,retract,liver:
+    AP: 0.0583
+  irrigator,retract,omentum:
+    AP: 0.1022
+  grasper,null_verb,null_target:
+    AP: 0.5536
+  bipolar,null_verb,null_target:
+    AP: 0.0693
+  hook,null_verb,null_target:
+    AP: 0.5915
+  scissors,null_verb,null_target:
+    AP: 0.1667
+  clipper,null_verb,null_target:
+    AP: 0.1831
+  irrigator,null_verb,null_target:
+    AP: 0.4342
+INSTRUMENT METRICS:
+  Overall mAP: 0.9568
+  grasper:
+    AP: 0.9913
+  bipolar:
+    AP: 0.9421
+  hook:
+    AP: 0.9698
+  scissors:
+    AP: 0.9000
+  clipper:
+    AP: 0.9970
+  irrigator:
+    AP: 0.9407
+VERB METRICS:
+  Overall mAP: 0.7895
+  grasp:
+    AP: 0.7989
+  retract:
+    AP: 0.9842
+  dissect:
+    AP: 0.9197
+  coagulate:
+    AP: 0.8691
+  clip:
+    AP: 0.9704
+  cut:
+    AP: 0.9134
+  aspirate:
+    AP: 0.8936
+  irrigate:
+    AP: 0.6250
+  pack:
+    AP: 0.3655
+  null_verb:
+    AP: 0.5550
+TARGET METRICS:
+  Overall mAP: 0.5672
+  gallbladder:
+    AP: 0.9691
+  cystic_plate:
+    AP: 0.1985
+  cystic_duct:
+    AP: 0.6188
+  cystic_artery:
+    AP: 0.4728
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0629
+  fluid:
+    AP: 0.8936
+  abdominal_wall_cavity:
+    AP: 0.6262
+  liver:
+    AP: 0.8658
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5434
+  peritoneum:
+    AP: 0.2748
+  gut:
+    AP: 0.3348
+  specimen_bag:
+    AP: 0.9574
+  null_target:
+    AP: 0.5550
+Learning rates: ['0.000008', '0.000008', '0.000080', '0.000080']
+Task weights: {'verb': 0.31496707843787514, 'instrument': 0.2651016803468499, 'target': 0.41993124121527503, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0126, mAP: 0.7895
+Instrument - Loss: 0.0052, mAP: 0.9568
+Target - Loss: 0.0139, mAP: 0.5672
+Triplet - Loss: 0.0126, mAP: 0.3892
+--------------------------------------------------
+Validation Results - Epoch 13/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3952
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0144
+  grasper,grasp,cystic_duct:
+    AP: 0.1735
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1318
+  grasper,grasp,omentum:
+    AP: 0.0056
+  grasper,grasp,specimen_bag:
+    AP: 0.9535
+  grasper,pack,gallbladder:
+    AP: 0.3911
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9692
+  grasper,retract,gut:
+    AP: 0.2890
+  grasper,retract,liver:
+    AP: 0.8541
+  grasper,retract,omentum:
+    AP: 0.6756
+  grasper,retract,peritoneum:
+    AP: 0.3152
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8143
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0667
+  bipolar,coagulate,cystic_artery:
+    AP: 0.8333
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0681
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9830
+  bipolar,coagulate,omentum:
+    AP: 0.8259
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0093
+  bipolar,dissect,cystic_duct:
+    AP: 0.0270
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.3333
+  hook,coagulate,gallbladder:
+    AP: 0.1056
+  hook,coagulate,liver:
+    AP: 0.0035
+  hook,coagulate,omentum:
+    AP: 0.0045
+  hook,dissect,cystic_artery:
+    AP: 0.2866
+  hook,dissect,cystic_duct:
+    AP: 0.4662
+  hook,dissect,cystic_plate:
+    AP: 0.2492
+  hook,dissect,gallbladder:
+    AP: 0.8493
+  hook,dissect,omentum:
+    AP: 0.3465
+  hook,dissect,peritoneum:
+    AP: 0.0357
+  hook,retract,gallbladder:
+    AP: 0.8214
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0183
+  scissors,cut,blood_vessel:
+    AP: 0.0024
+  scissors,cut,cystic_artery:
+    AP: 0.6760
+  scissors,cut,cystic_duct:
+    AP: 0.7554
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0264
+  clipper,clip,blood_vessel:
+    AP: 0.0909
+  clipper,clip,cystic_artery:
+    AP: 0.7019
+  clipper,clip,cystic_duct:
+    AP: 0.8699
+  irrigator,aspirate,fluid:
+    AP: 0.8966
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.5000
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 0.3333
+  irrigator,retract,liver:
+    AP: 0.0781
+  irrigator,retract,omentum:
+    AP: 0.1077
+  grasper,null_verb,null_target:
+    AP: 0.5243
+  bipolar,null_verb,null_target:
+    AP: 0.0842
+  hook,null_verb,null_target:
+    AP: 0.6039
+  scissors,null_verb,null_target:
+    AP: 0.0588
+  clipper,null_verb,null_target:
+    AP: 0.1716
+  irrigator,null_verb,null_target:
+    AP: 0.3590
+INSTRUMENT METRICS:
+  Overall mAP: 0.9578
+  grasper:
+    AP: 0.9903
+  bipolar:
+    AP: 0.9586
+  hook:
+    AP: 0.9655
+  scissors:
+    AP: 0.9023
+  clipper:
+    AP: 0.9970
+  irrigator:
+    AP: 0.9332
+VERB METRICS:
+  Overall mAP: 0.7768
+  grasp:
+    AP: 0.8020
+  retract:
+    AP: 0.9828
+  dissect:
+    AP: 0.9147
+  coagulate:
+    AP: 0.8803
+  clip:
+    AP: 0.9701
+  cut:
+    AP: 0.8952
+  aspirate:
+    AP: 0.8966
+  irrigate:
+    AP: 0.5000
+  pack:
+    AP: 0.3911
+  null_verb:
+    AP: 0.5356
+TARGET METRICS:
+  Overall mAP: 0.5677
+  gallbladder:
+    AP: 0.9717
+  cystic_plate:
+    AP: 0.1987
+  cystic_duct:
+    AP: 0.6535
+  cystic_artery:
+    AP: 0.4911
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0381
+  fluid:
+    AP: 0.8966
+  abdominal_wall_cavity:
+    AP: 0.6872
+  liver:
+    AP: 0.8657
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5765
+  peritoneum:
+    AP: 0.2230
+  gut:
+    AP: 0.2890
+  specimen_bag:
+    AP: 0.9535
+  null_target:
+    AP: 0.5356
+Learning rates: ['0.000004', '0.000004', '0.000035', '0.000035']
+Task weights: {'verb': 0.3182581900944699, 'instrument': 0.2638054335952319, 'target': 0.4179363763102981, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0107, mAP: 0.7768
+Instrument - Loss: 0.0038, mAP: 0.9578
+Target - Loss: 0.0096, mAP: 0.5677
+Triplet - Loss: 0.0115, mAP: 0.3952
+--------------------------------------------------
+Validation Results - Epoch 14/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3816
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0144
+  grasper,grasp,cystic_duct:
+    AP: 0.1947
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1754
+  grasper,grasp,omentum:
+    AP: 0.0045
+  grasper,grasp,specimen_bag:
+    AP: 0.9531
+  grasper,pack,gallbladder:
+    AP: 0.3912
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9701
+  grasper,retract,gut:
+    AP: 0.2203
+  grasper,retract,liver:
+    AP: 0.8601
+  grasper,retract,omentum:
+    AP: 0.6658
+  grasper,retract,peritoneum:
+    AP: 0.3521
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8111
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1429
+  bipolar,coagulate,cystic_artery:
+    AP: 0.6667
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0751
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9795
+  bipolar,coagulate,omentum:
+    AP: 0.7994
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0132
+  bipolar,dissect,cystic_duct:
+    AP: 0.0556
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.5000
+  hook,coagulate,gallbladder:
+    AP: 0.0917
+  hook,coagulate,liver:
+    AP: 0.0040
+  hook,coagulate,omentum:
+    AP: 0.0063
+  hook,dissect,cystic_artery:
+    AP: 0.3062
+  hook,dissect,cystic_duct:
+    AP: 0.4504
+  hook,dissect,cystic_plate:
+    AP: 0.2543
+  hook,dissect,gallbladder:
+    AP: 0.8490
+  hook,dissect,omentum:
+    AP: 0.3357
+  hook,dissect,peritoneum:
+    AP: 0.0400
+  hook,retract,gallbladder:
+    AP: 0.7500
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0132
+  scissors,cut,blood_vessel:
+    AP: 0.0016
+  scissors,cut,cystic_artery:
+    AP: 0.5909
+  scissors,cut,cystic_duct:
+    AP: 0.7345
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0176
+  clipper,clip,blood_vessel:
+    AP: 0.0667
+  clipper,clip,cystic_artery:
+    AP: 0.6873
+  clipper,clip,cystic_duct:
+    AP: 0.8477
+  irrigator,aspirate,fluid:
+    AP: 0.8867
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.3333
+  irrigator,irrigate,liver:
+    AP: 0.5000
+  irrigator,retract,gallbladder:
+    AP: 0.3333
+  irrigator,retract,liver:
+    AP: 0.0796
+  irrigator,retract,omentum:
+    AP: 0.1123
+  grasper,null_verb,null_target:
+    AP: 0.5212
+  bipolar,null_verb,null_target:
+    AP: 0.0705
+  hook,null_verb,null_target:
+    AP: 0.6075
+  scissors,null_verb,null_target:
+    AP: 0.1667
+  clipper,null_verb,null_target:
+    AP: 0.1778
+  irrigator,null_verb,null_target:
+    AP: 0.4013
+INSTRUMENT METRICS:
+  Overall mAP: 0.9598
+  grasper:
+    AP: 0.9905
+  bipolar:
+    AP: 0.9541
+  hook:
+    AP: 0.9666
+  scissors:
+    AP: 0.9119
+  clipper:
+    AP: 0.9978
+  irrigator:
+    AP: 0.9378
+VERB METRICS:
+  Overall mAP: 0.7589
+  grasp:
+    AP: 0.8038
+  retract:
+    AP: 0.9826
+  dissect:
+    AP: 0.9136
+  coagulate:
+    AP: 0.8813
+  clip:
+    AP: 0.9733
+  cut:
+    AP: 0.9122
+  aspirate:
+    AP: 0.8867
+  irrigate:
+    AP: 0.2917
+  pack:
+    AP: 0.3912
+  null_verb:
+    AP: 0.5526
+TARGET METRICS:
+  Overall mAP: 0.5676
+  gallbladder:
+    AP: 0.9715
+  cystic_plate:
+    AP: 0.2052
+  cystic_duct:
+    AP: 0.6358
+  cystic_artery:
+    AP: 0.4787
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0415
+  fluid:
+    AP: 0.8867
+  abdominal_wall_cavity:
+    AP: 0.6875
+  liver:
+    AP: 0.8730
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.5676
+  peritoneum:
+    AP: 0.3052
+  gut:
+    AP: 0.2203
+  specimen_bag:
+    AP: 0.9531
+  null_target:
+    AP: 0.5526
+Learning rates: ['0.000002', '0.000002', '0.000020', '0.000020']
+Task weights: {'verb': 0.3228885992265241, 'instrument': 0.26168869257379884, 'target': 0.41542270819967714, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.0085, mAP: 0.7589
+Instrument - Loss: 0.0031, mAP: 0.9598
+Target - Loss: 0.0089, mAP: 0.5676
+Triplet - Loss: 0.0111, mAP: 0.3816
+--------------------------------------------------
+Loading best teacher model from 04_models_dir/training_20250507_191455/best_model_teacher.pth for distillation...
+Training the student model...
+Trainable parameters: 53,501,304
+Validation Results - Epoch 1/14:
+TRIPLET METRICS:
+  Overall mAP: 0.2615
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0205
+  grasper,grasp,cystic_duct:
+    AP: 0.0557
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1296
+  grasper,grasp,omentum:
+    AP: 0.0133
+  grasper,grasp,specimen_bag:
+    AP: 0.8527
+  grasper,pack,gallbladder:
+    AP: 0.0875
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.8994
+  grasper,retract,gut:
+    AP: 0.0847
+  grasper,retract,liver:
+    AP: 0.5741
+  grasper,retract,omentum:
+    AP: 0.5162
+  grasper,retract,peritoneum:
+    AP: 0.1956
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.6433
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1667
+  bipolar,coagulate,cystic_artery:
+    AP: 0.0714
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0633
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.6886
+  bipolar,coagulate,omentum:
+    AP: 0.6307
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0031
+  bipolar,dissect,cystic_duct:
+    AP: 0.0054
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.0116
+  hook,coagulate,gallbladder:
+    AP: 0.0269
+  hook,coagulate,liver:
+    AP: 0.8333
+  hook,coagulate,omentum:
+    AP: 0.0095
+  hook,dissect,cystic_artery:
+    AP: 0.1855
+  hook,dissect,cystic_duct:
+    AP: 0.2743
+  hook,dissect,cystic_plate:
+    AP: 0.0590
+  hook,dissect,gallbladder:
+    AP: 0.7137
+  hook,dissect,omentum:
+    AP: 0.2978
+  hook,dissect,peritoneum:
+    AP: 0.0167
+  hook,retract,gallbladder:
+    AP: 0.1035
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0167
+  scissors,cut,blood_vessel:
+    AP: 1.0000
+  scissors,cut,cystic_artery:
+    AP: 0.2587
+  scissors,cut,cystic_duct:
+    AP: 0.4377
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0502
+  clipper,clip,blood_vessel:
+    AP: 0.0357
+  clipper,clip,cystic_artery:
+    AP: 0.6236
+  clipper,clip,cystic_duct:
+    AP: 0.4796
+  irrigator,aspirate,fluid:
+    AP: 0.8481
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.0714
+  irrigator,irrigate,liver:
+    AP: 0.0769
+  irrigator,retract,gallbladder:
+    AP: 0.0270
+  irrigator,retract,liver:
+    AP: 0.0256
+  irrigator,retract,omentum:
+    AP: 0.0137
+  grasper,null_verb,null_target:
+    AP: 0.2785
+  bipolar,null_verb,null_target:
+    AP: 0.1346
+  hook,null_verb,null_target:
+    AP: 0.3705
+  scissors,null_verb,null_target:
+    AP: 0.0145
+  clipper,null_verb,null_target:
+    AP: 0.0622
+  irrigator,null_verb,null_target:
+    AP: 0.0177
+INSTRUMENT METRICS:
+  Overall mAP: 0.8767
+  grasper:
+    AP: 0.9846
+  bipolar:
+    AP: 0.8358
+  hook:
+    AP: 0.9652
+  scissors:
+    AP: 0.7503
+  clipper:
+    AP: 0.9215
+  irrigator:
+    AP: 0.8026
+VERB METRICS:
+  Overall mAP: 0.5908
+  grasp:
+    AP: 0.6579
+  retract:
+    AP: 0.9562
+  dissect:
+    AP: 0.8753
+  coagulate:
+    AP: 0.6571
+  clip:
+    AP: 0.8693
+  cut:
+    AP: 0.6707
+  aspirate:
+    AP: 0.8481
+  irrigate:
+    AP: 0.0576
+  pack:
+    AP: 0.0875
+  null_verb:
+    AP: 0.2279
+TARGET METRICS:
+  Overall mAP: 0.3881
+  gallbladder:
+    AP: 0.9346
+  cystic_plate:
+    AP: 0.0405
+  cystic_duct:
+    AP: 0.3453
+  cystic_artery:
+    AP: 0.2833
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.1482
+  fluid:
+    AP: 0.8481
+  abdominal_wall_cavity:
+    AP: 0.1295
+  liver:
+    AP: 0.5619
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4491
+  peritoneum:
+    AP: 0.1393
+  gut:
+    AP: 0.0847
+  specimen_bag:
+    AP: 0.8527
+  null_target:
+    AP: 0.2279
+Learning rates: ['0.000085', '0.000085', '0.000850', '0.000850']
+Task weights: {'verb': 0.32025608427852675, 'instrument': 0.22650722166569684, 'target': 0.4532366940557765, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.1983, mAP: 0.5908
+Instrument - Loss: 0.1399, mAP: 0.8767
+Target - Loss: 0.1714, mAP: 0.3881
+Triplet - Loss: 0.0814, mAP: 0.2615
+--------------------------------------------------
+New best triplet mAP: 0.2615
+--------------------------------------------------
+Validation Results - Epoch 2/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3052
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0501
+  grasper,grasp,cystic_duct:
+    AP: 0.6770
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.0690
+  grasper,grasp,omentum:
+    AP: 0.0051
+  grasper,grasp,specimen_bag:
+    AP: 0.9272
+  grasper,pack,gallbladder:
+    AP: 0.3958
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9451
+  grasper,retract,gut:
+    AP: 0.3297
+  grasper,retract,liver:
+    AP: 0.7248
+  grasper,retract,omentum:
+    AP: 0.4478
+  grasper,retract,peritoneum:
+    AP: 0.2277
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.7203
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0526
+  bipolar,coagulate,cystic_artery:
+    AP: 0.1222
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1362
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.8953
+  bipolar,coagulate,omentum:
+    AP: 0.7590
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0022
+  bipolar,dissect,cystic_duct:
+    AP: 0.0185
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.0127
+  hook,coagulate,gallbladder:
+    AP: 0.0419
+  hook,coagulate,liver:
+    AP: 0.1556
+  hook,coagulate,omentum:
+    AP: 0.0333
+  hook,dissect,cystic_artery:
+    AP: 0.3412
+  hook,dissect,cystic_duct:
+    AP: 0.2543
+  hook,dissect,cystic_plate:
+    AP: 0.1431
+  hook,dissect,gallbladder:
+    AP: 0.7078
+  hook,dissect,omentum:
+    AP: 0.1962
+  hook,dissect,peritoneum:
+    AP: 0.0323
+  hook,retract,gallbladder:
+    AP: 0.2688
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0064
+  scissors,cut,blood_vessel:
+    AP: 0.1429
+  scissors,cut,cystic_artery:
+    AP: 0.3917
+  scissors,cut,cystic_duct:
+    AP: 0.6022
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0215
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.6789
+  clipper,clip,cystic_duct:
+    AP: 0.3428
+  irrigator,aspirate,fluid:
+    AP: 0.8325
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1429
+  irrigator,irrigate,liver:
+    AP: 0.0278
+  irrigator,retract,gallbladder:
+    AP: 0.1250
+  irrigator,retract,liver:
+    AP: 0.0707
+  irrigator,retract,omentum:
+    AP: 0.0295
+  grasper,null_verb,null_target:
+    AP: 0.3839
+  bipolar,null_verb,null_target:
+    AP: 0.0435
+  hook,null_verb,null_target:
+    AP: 0.3994
+  scissors,null_verb,null_target:
+    AP: 0.2000
+  clipper,null_verb,null_target:
+    AP: 0.0795
+  irrigator,null_verb,null_target:
+    AP: 0.0463
+INSTRUMENT METRICS:
+  Overall mAP: 0.9160
+  grasper:
+    AP: 0.9841
+  bipolar:
+    AP: 0.9245
+  hook:
+    AP: 0.9578
+  scissors:
+    AP: 0.8016
+  clipper:
+    AP: 0.9414
+  irrigator:
+    AP: 0.8864
+VERB METRICS:
+  Overall mAP: 0.6829
+  grasp:
+    AP: 0.8145
+  retract:
+    AP: 0.9689
+  dissect:
+    AP: 0.8688
+  coagulate:
+    AP: 0.8345
+  clip:
+    AP: 0.8973
+  cut:
+    AP: 0.8665
+  aspirate:
+    AP: 0.8325
+  irrigate:
+    AP: 0.0500
+  pack:
+    AP: 0.3958
+  null_verb:
+    AP: 0.3002
+TARGET METRICS:
+  Overall mAP: 0.4832
+  gallbladder:
+    AP: 0.9534
+  cystic_plate:
+    AP: 0.1257
+  cystic_duct:
+    AP: 0.3751
+  cystic_artery:
+    AP: 0.4554
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0847
+  fluid:
+    AP: 0.8325
+  abdominal_wall_cavity:
+    AP: 0.5493
+  liver:
+    AP: 0.7413
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.3937
+  peritoneum:
+    AP: 0.2134
+  gut:
+    AP: 0.3297
+  specimen_bag:
+    AP: 0.9272
+  null_target:
+    AP: 0.3002
+Learning rates: ['0.000099', '0.000099', '0.000995', '0.000995']
+Task weights: {'verb': 0.32122889390112863, 'instrument': 0.2475415371951499, 'target': 0.43122956890372144, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.2650, mAP: 0.6829
+Instrument - Loss: 0.1736, mAP: 0.9160
+Target - Loss: 0.2409, mAP: 0.4832
+Triplet - Loss: 0.2447, mAP: 0.3052
+--------------------------------------------------
+New best triplet mAP: 0.3052
+--------------------------------------------------
+Validation Results - Epoch 3/14:
+TRIPLET METRICS:
+  Overall mAP: 0.2872
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0117
+  grasper,grasp,cystic_duct:
+    AP: 0.3040
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1495
+  grasper,grasp,omentum:
+    AP: 0.0055
+  grasper,grasp,specimen_bag:
+    AP: 0.9309
+  grasper,pack,gallbladder:
+    AP: 0.2153
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9292
+  grasper,retract,gut:
+    AP: 0.1320
+  grasper,retract,liver:
+    AP: 0.7456
+  grasper,retract,omentum:
+    AP: 0.5160
+  grasper,retract,peritoneum:
+    AP: 0.2201
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8909
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0588
+  bipolar,coagulate,cystic_artery:
+    AP: 0.1484
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.0895
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9512
+  bipolar,coagulate,omentum:
+    AP: 0.7822
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0025
+  bipolar,dissect,cystic_duct:
+    AP: 0.0286
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.1429
+  hook,coagulate,gallbladder:
+    AP: 0.0053
+  hook,coagulate,liver:
+    AP: 0.0471
+  hook,coagulate,omentum:
+    AP: 0.0263
+  hook,dissect,cystic_artery:
+    AP: 0.2757
+  hook,dissect,cystic_duct:
+    AP: 0.3339
+  hook,dissect,cystic_plate:
+    AP: 0.2249
+  hook,dissect,gallbladder:
+    AP: 0.7481
+  hook,dissect,omentum:
+    AP: 0.2090
+  hook,dissect,peritoneum:
+    AP: 0.0370
+  hook,retract,gallbladder:
+    AP: 0.2001
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0042
+  scissors,cut,blood_vessel:
+    AP: 0.0909
+  scissors,cut,cystic_artery:
+    AP: 0.3614
+  scissors,cut,cystic_duct:
+    AP: 0.5657
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0461
+  clipper,clip,blood_vessel:
+    AP: 0.1111
+  clipper,clip,cystic_artery:
+    AP: 0.5710
+  clipper,clip,cystic_duct:
+    AP: 0.4356
+  irrigator,aspirate,fluid:
+    AP: 0.9156
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.0909
+  irrigator,irrigate,liver:
+    AP: 0.0556
+  irrigator,retract,gallbladder:
+    AP: 0.1429
+  irrigator,retract,liver:
+    AP: 0.2639
+  irrigator,retract,omentum:
+    AP: 0.0233
+  grasper,null_verb,null_target:
+    AP: 0.5022
+  bipolar,null_verb,null_target:
+    AP: 0.0384
+  hook,null_verb,null_target:
+    AP: 0.4538
+  scissors,null_verb,null_target:
+    AP: 0.1111
+  clipper,null_verb,null_target:
+    AP: 0.0667
+  irrigator,null_verb,null_target:
+    AP: 0.1484
+INSTRUMENT METRICS:
+  Overall mAP: 0.9283
+  grasper:
+    AP: 0.9767
+  bipolar:
+    AP: 0.9328
+  hook:
+    AP: 0.9698
+  scissors:
+    AP: 0.8401
+  clipper:
+    AP: 0.9596
+  irrigator:
+    AP: 0.8907
+VERB METRICS:
+  Overall mAP: 0.6933
+  grasp:
+    AP: 0.7916
+  retract:
+    AP: 0.9562
+  dissect:
+    AP: 0.8973
+  coagulate:
+    AP: 0.8791
+  clip:
+    AP: 0.9115
+  cut:
+    AP: 0.8884
+  aspirate:
+    AP: 0.9156
+  irrigate:
+    AP: 0.0769
+  pack:
+    AP: 0.2153
+  null_verb:
+    AP: 0.4006
+TARGET METRICS:
+  Overall mAP: 0.4766
+  gallbladder:
+    AP: 0.9464
+  cystic_plate:
+    AP: 0.1323
+  cystic_duct:
+    AP: 0.3614
+  cystic_artery:
+    AP: 0.3299
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.0646
+  fluid:
+    AP: 0.9156
+  abdominal_wall_cavity:
+    AP: 0.6051
+  liver:
+    AP: 0.7556
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4262
+  peritoneum:
+    AP: 0.1956
+  gut:
+    AP: 0.1320
+  specimen_bag:
+    AP: 0.9309
+  null_target:
+    AP: 0.4006
+Learning rates: ['0.000096', '0.000096', '0.000962', '0.000962']
+Task weights: {'verb': 0.3177540443954796, 'instrument': 0.24512681226257801, 'target': 0.4371191433419424, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.2983, mAP: 0.6933
+Instrument - Loss: 0.2090, mAP: 0.9283
+Target - Loss: 0.2882, mAP: 0.4766
+Triplet - Loss: 0.4156, mAP: 0.2872
+--------------------------------------------------
+Validation Results - Epoch 4/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3036
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0146
+  grasper,grasp,cystic_duct:
+    AP: 0.1835
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2097
+  grasper,grasp,omentum:
+    AP: 0.0065
+  grasper,grasp,specimen_bag:
+    AP: 0.9443
+  grasper,pack,gallbladder:
+    AP: 0.2411
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9317
+  grasper,retract,gut:
+    AP: 0.1465
+  grasper,retract,liver:
+    AP: 0.7702
+  grasper,retract,omentum:
+    AP: 0.5193
+  grasper,retract,peritoneum:
+    AP: 0.2276
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8767
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0833
+  bipolar,coagulate,cystic_artery:
+    AP: 0.1079
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1132
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.8443
+  bipolar,coagulate,omentum:
+    AP: 0.5475
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0056
+  bipolar,dissect,cystic_duct:
+    AP: 0.0019
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.5000
+  hook,coagulate,gallbladder:
+    AP: 0.0056
+  hook,coagulate,liver:
+    AP: 0.1556
+  hook,coagulate,omentum:
+    AP: 0.0500
+  hook,dissect,cystic_artery:
+    AP: 0.1853
+  hook,dissect,cystic_duct:
+    AP: 0.3937
+  hook,dissect,cystic_plate:
+    AP: 0.2866
+  hook,dissect,gallbladder:
+    AP: 0.7529
+  hook,dissect,omentum:
+    AP: 0.2067
+  hook,dissect,peritoneum:
+    AP: 0.0133
+  hook,retract,gallbladder:
+    AP: 0.3290
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0088
+  scissors,cut,blood_vessel:
+    AP: 0.5000
+  scissors,cut,cystic_artery:
+    AP: 0.4013
+  scissors,cut,cystic_duct:
+    AP: 0.4320
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0141
+  clipper,clip,blood_vessel:
+    AP: 0.3333
+  clipper,clip,cystic_artery:
+    AP: 0.5414
+  clipper,clip,cystic_duct:
+    AP: 0.4016
+  irrigator,aspirate,fluid:
+    AP: 0.8143
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1667
+  irrigator,irrigate,liver:
+    AP: 0.0476
+  irrigator,retract,gallbladder:
+    AP: 0.0286
+  irrigator,retract,liver:
+    AP: 0.5161
+  irrigator,retract,omentum:
+    AP: 0.0315
+  grasper,null_verb,null_target:
+    AP: 0.3782
+  bipolar,null_verb,null_target:
+    AP: 0.0290
+  hook,null_verb,null_target:
+    AP: 0.5323
+  scissors,null_verb,null_target:
+    AP: 0.2500
+  clipper,null_verb,null_target:
+    AP: 0.0534
+  irrigator,null_verb,null_target:
+    AP: 0.0458
+INSTRUMENT METRICS:
+  Overall mAP: 0.8676
+  grasper:
+    AP: 0.9856
+  bipolar:
+    AP: 0.9033
+  hook:
+    AP: 0.9548
+  scissors:
+    AP: 0.7539
+  clipper:
+    AP: 0.9279
+  irrigator:
+    AP: 0.6800
+VERB METRICS:
+  Overall mAP: 0.6474
+  grasp:
+    AP: 0.7767
+  retract:
+    AP: 0.9652
+  dissect:
+    AP: 0.8830
+  coagulate:
+    AP: 0.8242
+  clip:
+    AP: 0.8885
+  cut:
+    AP: 0.6742
+  aspirate:
+    AP: 0.8143
+  irrigate:
+    AP: 0.1010
+  pack:
+    AP: 0.2411
+  null_verb:
+    AP: 0.3056
+TARGET METRICS:
+  Overall mAP: 0.4933
+  gallbladder:
+    AP: 0.9430
+  cystic_plate:
+    AP: 0.1544
+  cystic_duct:
+    AP: 0.3647
+  cystic_artery:
+    AP: 0.3336
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.1454
+  fluid:
+    AP: 0.8143
+  abdominal_wall_cavity:
+    AP: 0.8075
+  liver:
+    AP: 0.7742
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4255
+  peritoneum:
+    AP: 0.2533
+  gut:
+    AP: 0.1465
+  specimen_bag:
+    AP: 0.9443
+  null_target:
+    AP: 0.3056
+Learning rates: ['0.000090', '0.000090', '0.000901', '0.000901']
+Task weights: {'verb': 0.3297900049450029, 'instrument': 0.25474039774671325, 'target': 0.415469597308284, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.3521, mAP: 0.6474
+Instrument - Loss: 0.2447, mAP: 0.8676
+Target - Loss: 0.3539, mAP: 0.4933
+Triplet - Loss: 0.5915, mAP: 0.3036
+--------------------------------------------------
+Validation Results - Epoch 5/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3122
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0189
+  grasper,grasp,cystic_duct:
+    AP: 0.0467
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2199
+  grasper,grasp,omentum:
+    AP: 0.0023
+  grasper,grasp,specimen_bag:
+    AP: 0.9594
+  grasper,pack,gallbladder:
+    AP: 0.2818
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9355
+  grasper,retract,gut:
+    AP: 0.0995
+  grasper,retract,liver:
+    AP: 0.8050
+  grasper,retract,omentum:
+    AP: 0.4790
+  grasper,retract,peritoneum:
+    AP: 0.2272
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9250
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0833
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2024
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.2611
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9557
+  bipolar,coagulate,omentum:
+    AP: 0.6369
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0060
+  bipolar,dissect,cystic_duct:
+    AP: 0.0020
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.5000
+  hook,coagulate,gallbladder:
+    AP: 0.0071
+  hook,coagulate,liver:
+    AP: 0.0804
+  hook,coagulate,omentum:
+    AP: 0.0172
+  hook,dissect,cystic_artery:
+    AP: 0.1644
+  hook,dissect,cystic_duct:
+    AP: 0.3655
+  hook,dissect,cystic_plate:
+    AP: 0.1549
+  hook,dissect,gallbladder:
+    AP: 0.7571
+  hook,dissect,omentum:
+    AP: 0.2017
+  hook,dissect,peritoneum:
+    AP: 0.0345
+  hook,retract,gallbladder:
+    AP: 0.2774
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0129
+  scissors,cut,blood_vessel:
+    AP: 0.1667
+  scissors,cut,cystic_artery:
+    AP: 0.4523
+  scissors,cut,cystic_duct:
+    AP: 0.5428
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0155
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.6073
+  clipper,clip,cystic_duct:
+    AP: 0.3358
+  irrigator,aspirate,fluid:
+    AP: 0.8865
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.1250
+  irrigator,irrigate,liver:
+    AP: 0.1000
+  irrigator,retract,gallbladder:
+    AP: 0.1111
+  irrigator,retract,liver:
+    AP: 0.0641
+  irrigator,retract,omentum:
+    AP: 0.0189
+  grasper,null_verb,null_target:
+    AP: 0.3745
+  bipolar,null_verb,null_target:
+    AP: 0.0609
+  hook,null_verb,null_target:
+    AP: 0.5484
+  scissors,null_verb,null_target:
+    AP: 0.2500
+  clipper,null_verb,null_target:
+    AP: 0.0594
+  irrigator,null_verb,null_target:
+    AP: 0.1682
+INSTRUMENT METRICS:
+  Overall mAP: 0.8934
+  grasper:
+    AP: 0.9759
+  bipolar:
+    AP: 0.8903
+  hook:
+    AP: 0.9681
+  scissors:
+    AP: 0.7899
+  clipper:
+    AP: 0.9270
+  irrigator:
+    AP: 0.8094
+VERB METRICS:
+  Overall mAP: 0.6702
+  grasp:
+    AP: 0.8124
+  retract:
+    AP: 0.9543
+  dissect:
+    AP: 0.9012
+  coagulate:
+    AP: 0.7295
+  clip:
+    AP: 0.9034
+  cut:
+    AP: 0.8574
+  aspirate:
+    AP: 0.8865
+  irrigate:
+    AP: 0.0801
+  pack:
+    AP: 0.2818
+  null_verb:
+    AP: 0.2956
+TARGET METRICS:
+  Overall mAP: 0.5152
+  gallbladder:
+    AP: 0.9454
+  cystic_plate:
+    AP: 0.1561
+  cystic_duct:
+    AP: 0.3717
+  cystic_artery:
+    AP: 0.3495
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3852
+  fluid:
+    AP: 0.8865
+  abdominal_wall_cavity:
+    AP: 0.8218
+  liver:
+    AP: 0.8282
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.3989
+  peritoneum:
+    AP: 0.2004
+  gut:
+    AP: 0.0995
+  specimen_bag:
+    AP: 0.9594
+  null_target:
+    AP: 0.2956
+Learning rates: ['0.000082', '0.000082', '0.000815', '0.000815']
+Task weights: {'verb': 0.33033718853362476, 'instrument': 0.2561138183926511, 'target': 0.413548993073724, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.4003, mAP: 0.6702
+Instrument - Loss: 0.2851, mAP: 0.8934
+Target - Loss: 0.4173, mAP: 0.5152
+Triplet - Loss: 0.7684, mAP: 0.3122
+--------------------------------------------------
+New best triplet mAP: 0.3122
+--------------------------------------------------
+Validation Results - Epoch 6/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3180
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0222
+  grasper,grasp,cystic_duct:
+    AP: 0.2343
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2298
+  grasper,grasp,omentum:
+    AP: 0.0023
+  grasper,grasp,specimen_bag:
+    AP: 0.9370
+  grasper,pack,gallbladder:
+    AP: 0.2998
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9387
+  grasper,retract,gut:
+    AP: 0.1217
+  grasper,retract,liver:
+    AP: 0.7960
+  grasper,retract,omentum:
+    AP: 0.5432
+  grasper,retract,peritoneum:
+    AP: 0.2937
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.5118
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0833
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2667
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1257
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9580
+  bipolar,coagulate,omentum:
+    AP: 0.6409
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0022
+  bipolar,dissect,cystic_duct:
+    AP: 0.0017
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0063
+  hook,coagulate,liver:
+    AP: 0.0556
+  hook,coagulate,omentum:
+    AP: 0.0417
+  hook,dissect,cystic_artery:
+    AP: 0.2383
+  hook,dissect,cystic_duct:
+    AP: 0.3705
+  hook,dissect,cystic_plate:
+    AP: 0.1170
+  hook,dissect,gallbladder:
+    AP: 0.7776
+  hook,dissect,omentum:
+    AP: 0.2638
+  hook,dissect,peritoneum:
+    AP: 0.0323
+  hook,retract,gallbladder:
+    AP: 0.1161
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0067
+  scissors,cut,blood_vessel:
+    AP: 0.3333
+  scissors,cut,cystic_artery:
+    AP: 0.4302
+  scissors,cut,cystic_duct:
+    AP: 0.6092
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0100
+  clipper,clip,blood_vessel:
+    AP: 0.0833
+  clipper,clip,cystic_artery:
+    AP: 0.6770
+  clipper,clip,cystic_duct:
+    AP: 0.3479
+  irrigator,aspirate,fluid:
+    AP: 0.9549
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.3333
+  irrigator,irrigate,liver:
+    AP: 0.0167
+  irrigator,retract,gallbladder:
+    AP: 0.1667
+  irrigator,retract,liver:
+    AP: 0.5270
+  irrigator,retract,omentum:
+    AP: 0.0170
+  grasper,null_verb,null_target:
+    AP: 0.2793
+  bipolar,null_verb,null_target:
+    AP: 0.1550
+  hook,null_verb,null_target:
+    AP: 0.4690
+  scissors,null_verb,null_target:
+    AP: 0.3333
+  clipper,null_verb,null_target:
+    AP: 0.0571
+  irrigator,null_verb,null_target:
+    AP: 0.0625
+INSTRUMENT METRICS:
+  Overall mAP: 0.8873
+  grasper:
+    AP: 0.9780
+  bipolar:
+    AP: 0.8917
+  hook:
+    AP: 0.9588
+  scissors:
+    AP: 0.7237
+  clipper:
+    AP: 0.9785
+  irrigator:
+    AP: 0.7929
+VERB METRICS:
+  Overall mAP: 0.6773
+  grasp:
+    AP: 0.7952
+  retract:
+    AP: 0.9687
+  dissect:
+    AP: 0.9066
+  coagulate:
+    AP: 0.7902
+  clip:
+    AP: 0.9242
+  cut:
+    AP: 0.8061
+  aspirate:
+    AP: 0.9549
+  irrigate:
+    AP: 0.0621
+  pack:
+    AP: 0.2998
+  null_verb:
+    AP: 0.2651
+TARGET METRICS:
+  Overall mAP: 0.4775
+  gallbladder:
+    AP: 0.9524
+  cystic_plate:
+    AP: 0.1558
+  cystic_duct:
+    AP: 0.3751
+  cystic_artery:
+    AP: 0.3509
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.1571
+  fluid:
+    AP: 0.9549
+  abdominal_wall_cavity:
+    AP: 0.4448
+  liver:
+    AP: 0.8018
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4394
+  peritoneum:
+    AP: 0.2511
+  gut:
+    AP: 0.1217
+  specimen_bag:
+    AP: 0.9370
+  null_target:
+    AP: 0.2651
+Learning rates: ['0.000071', '0.000071', '0.000712', '0.000712']
+Task weights: {'verb': 0.31914899103093497, 'instrument': 0.25127197867256595, 'target': 0.4295790302964992, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.4510, mAP: 0.6773
+Instrument - Loss: 0.3270, mAP: 0.8873
+Target - Loss: 0.4785, mAP: 0.4775
+Triplet - Loss: 0.9449, mAP: 0.3180
+--------------------------------------------------
+New best triplet mAP: 0.3180
+--------------------------------------------------
+Validation Results - Epoch 7/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3601
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0307
+  grasper,grasp,cystic_duct:
+    AP: 0.1714
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.1858
+  grasper,grasp,omentum:
+    AP: 0.0017
+  grasper,grasp,specimen_bag:
+    AP: 0.9307
+  grasper,pack,gallbladder:
+    AP: 0.2755
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9293
+  grasper,retract,gut:
+    AP: 0.2927
+  grasper,retract,liver:
+    AP: 0.7676
+  grasper,retract,omentum:
+    AP: 0.5404
+  grasper,retract,peritoneum:
+    AP: 0.1076
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8583
+  bipolar,coagulate,blood_vessel:
+    AP: 0.2000
+  bipolar,coagulate,cystic_artery:
+    AP: 0.1093
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1901
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9366
+  bipolar,coagulate,omentum:
+    AP: 0.6208
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0044
+  bipolar,dissect,cystic_duct:
+    AP: 0.0017
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0070
+  hook,coagulate,liver:
+    AP: 0.1010
+  hook,coagulate,omentum:
+    AP: 0.0400
+  hook,dissect,cystic_artery:
+    AP: 0.2713
+  hook,dissect,cystic_duct:
+    AP: 0.2940
+  hook,dissect,cystic_plate:
+    AP: 0.0971
+  hook,dissect,gallbladder:
+    AP: 0.7787
+  hook,dissect,omentum:
+    AP: 0.2110
+  hook,dissect,peritoneum:
+    AP: 0.0179
+  hook,retract,gallbladder:
+    AP: 0.1034
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0102
+  scissors,cut,blood_vessel:
+    AP: 0.1250
+  scissors,cut,cystic_artery:
+    AP: 0.3820
+  scissors,cut,cystic_duct:
+    AP: 0.6639
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0134
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.5504
+  clipper,clip,cystic_duct:
+    AP: 0.4967
+  irrigator,aspirate,fluid:
+    AP: 0.9134
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 0.0667
+  irrigator,retract,gallbladder:
+    AP: 0.2500
+  irrigator,retract,liver:
+    AP: 0.5208
+  irrigator,retract,omentum:
+    AP: 0.0127
+  grasper,null_verb,null_target:
+    AP: 0.2633
+  bipolar,null_verb,null_target:
+    AP: 0.0712
+  hook,null_verb,null_target:
+    AP: 0.3900
+  scissors,null_verb,null_target:
+    AP: 1.0000
+  clipper,null_verb,null_target:
+    AP: 0.0581
+  irrigator,null_verb,null_target:
+    AP: 0.1426
+INSTRUMENT METRICS:
+  Overall mAP: 0.9135
+  grasper:
+    AP: 0.9835
+  bipolar:
+    AP: 0.9322
+  hook:
+    AP: 0.9570
+  scissors:
+    AP: 0.8562
+  clipper:
+    AP: 0.9735
+  irrigator:
+    AP: 0.7787
+VERB METRICS:
+  Overall mAP: 0.7426
+  grasp:
+    AP: 0.7924
+  retract:
+    AP: 0.9666
+  dissect:
+    AP: 0.9210
+  coagulate:
+    AP: 0.8730
+  clip:
+    AP: 0.9142
+  cut:
+    AP: 0.9183
+  aspirate:
+    AP: 0.9134
+  irrigate:
+    AP: 0.5500
+  pack:
+    AP: 0.2755
+  null_verb:
+    AP: 0.3017
+TARGET METRICS:
+  Overall mAP: 0.5087
+  gallbladder:
+    AP: 0.9451
+  cystic_plate:
+    AP: 0.0958
+  cystic_duct:
+    AP: 0.3096
+  cystic_artery:
+    AP: 0.3624
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3711
+  fluid:
+    AP: 0.9134
+  abdominal_wall_cavity:
+    AP: 0.7318
+  liver:
+    AP: 0.7950
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4693
+  peritoneum:
+    AP: 0.0949
+  gut:
+    AP: 0.2927
+  specimen_bag:
+    AP: 0.9307
+  null_target:
+    AP: 0.3017
+Learning rates: ['0.000060', '0.000060', '0.000595', '0.000595']
+Task weights: {'verb': 0.31098262862196435, 'instrument': 0.25854911813205095, 'target': 0.4304682532459847, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.4318, mAP: 0.7426
+Instrument - Loss: 0.3039, mAP: 0.9135
+Target - Loss: 0.4615, mAP: 0.5087
+Triplet - Loss: 0.9390, mAP: 0.3601
+--------------------------------------------------
+New best triplet mAP: 0.3601
+--------------------------------------------------
+Validation Results - Epoch 8/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3377
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0211
+  grasper,grasp,cystic_duct:
+    AP: 0.2845
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2499
+  grasper,grasp,omentum:
+    AP: 0.0016
+  grasper,grasp,specimen_bag:
+    AP: 0.9364
+  grasper,pack,gallbladder:
+    AP: 0.3834
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9461
+  grasper,retract,gut:
+    AP: 0.2272
+  grasper,retract,liver:
+    AP: 0.8002
+  grasper,retract,omentum:
+    AP: 0.5354
+  grasper,retract,peritoneum:
+    AP: 0.3591
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9429
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0213
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2500
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.5271
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9073
+  bipolar,coagulate,omentum:
+    AP: 0.5970
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0031
+  bipolar,dissect,cystic_duct:
+    AP: 0.0049
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0056
+  hook,coagulate,liver:
+    AP: 0.0546
+  hook,coagulate,omentum:
+    AP: 0.0385
+  hook,dissect,cystic_artery:
+    AP: 0.2610
+  hook,dissect,cystic_duct:
+    AP: 0.4061
+  hook,dissect,cystic_plate:
+    AP: 0.1667
+  hook,dissect,gallbladder:
+    AP: 0.8013
+  hook,dissect,omentum:
+    AP: 0.2539
+  hook,dissect,peritoneum:
+    AP: 0.0256
+  hook,retract,gallbladder:
+    AP: 0.2473
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0074
+  scissors,cut,blood_vessel:
+    AP: 0.1429
+  scissors,cut,cystic_artery:
+    AP: 0.3368
+  scissors,cut,cystic_duct:
+    AP: 0.5685
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0105
+  clipper,clip,blood_vessel:
+    AP: 0.5000
+  clipper,clip,cystic_artery:
+    AP: 0.6170
+  clipper,clip,cystic_duct:
+    AP: 0.4873
+  irrigator,aspirate,fluid:
+    AP: 0.7898
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.5000
+  irrigator,irrigate,liver:
+    AP: 0.0435
+  irrigator,retract,gallbladder:
+    AP: 0.1111
+  irrigator,retract,liver:
+    AP: 0.1154
+  irrigator,retract,omentum:
+    AP: 0.0110
+  grasper,null_verb,null_target:
+    AP: 0.3684
+  bipolar,null_verb,null_target:
+    AP: 0.0954
+  hook,null_verb,null_target:
+    AP: 0.5686
+  scissors,null_verb,null_target:
+    AP: 0.1667
+  clipper,null_verb,null_target:
+    AP: 0.0721
+  irrigator,null_verb,null_target:
+    AP: 0.1131
+INSTRUMENT METRICS:
+  Overall mAP: 0.9102
+  grasper:
+    AP: 0.9837
+  bipolar:
+    AP: 0.9359
+  hook:
+    AP: 0.9590
+  scissors:
+    AP: 0.8578
+  clipper:
+    AP: 0.9611
+  irrigator:
+    AP: 0.7638
+VERB METRICS:
+  Overall mAP: 0.7139
+  grasp:
+    AP: 0.7856
+  retract:
+    AP: 0.9723
+  dissect:
+    AP: 0.8930
+  coagulate:
+    AP: 0.8484
+  clip:
+    AP: 0.9260
+  cut:
+    AP: 0.9318
+  aspirate:
+    AP: 0.7898
+  irrigate:
+    AP: 0.2885
+  pack:
+    AP: 0.3834
+  null_verb:
+    AP: 0.3200
+TARGET METRICS:
+  Overall mAP: 0.5259
+  gallbladder:
+    AP: 0.9589
+  cystic_plate:
+    AP: 0.2133
+  cystic_duct:
+    AP: 0.4814
+  cystic_artery:
+    AP: 0.3750
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.1417
+  fluid:
+    AP: 0.7898
+  abdominal_wall_cavity:
+    AP: 0.8202
+  liver:
+    AP: 0.8112
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4619
+  peritoneum:
+    AP: 0.2996
+  gut:
+    AP: 0.2272
+  specimen_bag:
+    AP: 0.9364
+  null_target:
+    AP: 0.3200
+Learning rates: ['0.000047', '0.000047', '0.000473', '0.000473']
+Task weights: {'verb': 0.32196085311378236, 'instrument': 0.25938345143065195, 'target': 0.41865569545556564, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.4213, mAP: 0.7139
+Instrument - Loss: 0.2941, mAP: 0.9102
+Target - Loss: 0.4541, mAP: 0.5259
+Triplet - Loss: 0.9383, mAP: 0.3377
+--------------------------------------------------
+Validation Results - Epoch 9/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3380
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0407
+  grasper,grasp,cystic_duct:
+    AP: 0.0919
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2179
+  grasper,grasp,omentum:
+    AP: 0.0017
+  grasper,grasp,specimen_bag:
+    AP: 0.9216
+  grasper,pack,gallbladder:
+    AP: 0.2805
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9419
+  grasper,retract,gut:
+    AP: 0.2356
+  grasper,retract,liver:
+    AP: 0.7707
+  grasper,retract,omentum:
+    AP: 0.5663
+  grasper,retract,peritoneum:
+    AP: 0.3451
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8278
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0833
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2917
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.2190
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9258
+  bipolar,coagulate,omentum:
+    AP: 0.6117
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0029
+  bipolar,dissect,cystic_duct:
+    AP: 0.0016
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 0.3333
+  hook,coagulate,gallbladder:
+    AP: 0.0058
+  hook,coagulate,liver:
+    AP: 0.0508
+  hook,coagulate,omentum:
+    AP: 0.0370
+  hook,dissect,cystic_artery:
+    AP: 0.2813
+  hook,dissect,cystic_duct:
+    AP: 0.3513
+  hook,dissect,cystic_plate:
+    AP: 0.1754
+  hook,dissect,gallbladder:
+    AP: 0.7991
+  hook,dissect,omentum:
+    AP: 0.2407
+  hook,dissect,peritoneum:
+    AP: 0.0455
+  hook,retract,gallbladder:
+    AP: 0.2236
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0050
+  scissors,cut,blood_vessel:
+    AP: 0.1429
+  scissors,cut,cystic_artery:
+    AP: 0.4423
+  scissors,cut,cystic_duct:
+    AP: 0.5472
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0193
+  clipper,clip,blood_vessel:
+    AP: 0.2000
+  clipper,clip,cystic_artery:
+    AP: 0.5762
+  clipper,clip,cystic_duct:
+    AP: 0.4908
+  irrigator,aspirate,fluid:
+    AP: 0.8583
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 1.0000
+  irrigator,retract,gallbladder:
+    AP: 0.1000
+  irrigator,retract,liver:
+    AP: 0.1159
+  irrigator,retract,omentum:
+    AP: 0.0177
+  grasper,null_verb,null_target:
+    AP: 0.3877
+  bipolar,null_verb,null_target:
+    AP: 0.0839
+  hook,null_verb,null_target:
+    AP: 0.4600
+  scissors,null_verb,null_target:
+    AP: 0.1000
+  clipper,null_verb,null_target:
+    AP: 0.0397
+  irrigator,null_verb,null_target:
+    AP: 0.3902
+INSTRUMENT METRICS:
+  Overall mAP: 0.9050
+  grasper:
+    AP: 0.9850
+  bipolar:
+    AP: 0.9415
+  hook:
+    AP: 0.9572
+  scissors:
+    AP: 0.7810
+  clipper:
+    AP: 0.9532
+  irrigator:
+    AP: 0.8125
+VERB METRICS:
+  Overall mAP: 0.7618
+  grasp:
+    AP: 0.7672
+  retract:
+    AP: 0.9703
+  dissect:
+    AP: 0.8938
+  coagulate:
+    AP: 0.8791
+  clip:
+    AP: 0.8955
+  cut:
+    AP: 0.9026
+  aspirate:
+    AP: 0.8583
+  irrigate:
+    AP: 0.8333
+  pack:
+    AP: 0.2805
+  null_verb:
+    AP: 0.3372
+TARGET METRICS:
+  Overall mAP: 0.5202
+  gallbladder:
+    AP: 0.9532
+  cystic_plate:
+    AP: 0.1619
+  cystic_duct:
+    AP: 0.4174
+  cystic_artery:
+    AP: 0.3876
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.1039
+  fluid:
+    AP: 0.8583
+  abdominal_wall_cavity:
+    AP: 0.8403
+  liver:
+    AP: 0.7938
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4544
+  peritoneum:
+    AP: 0.2974
+  gut:
+    AP: 0.2356
+  specimen_bag:
+    AP: 0.9216
+  null_target:
+    AP: 0.3372
+Learning rates: ['0.000035', '0.000035', '0.000354', '0.000354']
+Task weights: {'verb': 0.3079806550238381, 'instrument': 0.2640785799253736, 'target': 0.4279407650507883, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.4112, mAP: 0.7618
+Instrument - Loss: 0.2874, mAP: 0.9050
+Target - Loss: 0.4449, mAP: 0.5202
+Triplet - Loss: 0.9353, mAP: 0.3380
+--------------------------------------------------
+Validation Results - Epoch 10/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3795
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0409
+  grasper,grasp,cystic_duct:
+    AP: 0.2743
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2478
+  grasper,grasp,omentum:
+    AP: 0.0023
+  grasper,grasp,specimen_bag:
+    AP: 0.9251
+  grasper,pack,gallbladder:
+    AP: 0.2773
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9533
+  grasper,retract,gut:
+    AP: 0.2981
+  grasper,retract,liver:
+    AP: 0.8047
+  grasper,retract,omentum:
+    AP: 0.6010
+  grasper,retract,peritoneum:
+    AP: 0.5952
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9111
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0625
+  bipolar,coagulate,cystic_artery:
+    AP: 0.3250
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1509
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9205
+  bipolar,coagulate,omentum:
+    AP: 0.6712
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0071
+  bipolar,dissect,cystic_duct:
+    AP: 0.0020
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0058
+  hook,coagulate,liver:
+    AP: 0.0430
+  hook,coagulate,omentum:
+    AP: 0.0370
+  hook,dissect,cystic_artery:
+    AP: 0.2613
+  hook,dissect,cystic_duct:
+    AP: 0.3407
+  hook,dissect,cystic_plate:
+    AP: 0.1528
+  hook,dissect,gallbladder:
+    AP: 0.7958
+  hook,dissect,omentum:
+    AP: 0.2500
+  hook,dissect,peritoneum:
+    AP: 0.0357
+  hook,retract,gallbladder:
+    AP: 0.2379
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0089
+  scissors,cut,blood_vessel:
+    AP: 0.2000
+  scissors,cut,cystic_artery:
+    AP: 0.4124
+  scissors,cut,cystic_duct:
+    AP: 0.4782
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0223
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.5582
+  clipper,clip,cystic_duct:
+    AP: 0.5249
+  irrigator,aspirate,fluid:
+    AP: 0.9267
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 0.0400
+  irrigator,retract,gallbladder:
+    AP: 0.1667
+  irrigator,retract,liver:
+    AP: 0.1463
+  irrigator,retract,omentum:
+    AP: 0.0166
+  grasper,null_verb,null_target:
+    AP: 0.3504
+  bipolar,null_verb,null_target:
+    AP: 0.2177
+  hook,null_verb,null_target:
+    AP: 0.5388
+  scissors,null_verb,null_target:
+    AP: 1.0000
+  clipper,null_verb,null_target:
+    AP: 0.0516
+  irrigator,null_verb,null_target:
+    AP: 0.0869
+INSTRUMENT METRICS:
+  Overall mAP: 0.9190
+  grasper:
+    AP: 0.9887
+  bipolar:
+    AP: 0.9329
+  hook:
+    AP: 0.9579
+  scissors:
+    AP: 0.8270
+  clipper:
+    AP: 0.9835
+  irrigator:
+    AP: 0.8242
+VERB METRICS:
+  Overall mAP: 0.7351
+  grasp:
+    AP: 0.7939
+  retract:
+    AP: 0.9761
+  dissect:
+    AP: 0.8919
+  coagulate:
+    AP: 0.8485
+  clip:
+    AP: 0.8909
+  cut:
+    AP: 0.9039
+  aspirate:
+    AP: 0.9267
+  irrigate:
+    AP: 0.5370
+  pack:
+    AP: 0.2773
+  null_verb:
+    AP: 0.3053
+TARGET METRICS:
+  Overall mAP: 0.5585
+  gallbladder:
+    AP: 0.9611
+  cystic_plate:
+    AP: 0.1243
+  cystic_duct:
+    AP: 0.3484
+  cystic_artery:
+    AP: 0.3931
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3683
+  fluid:
+    AP: 0.9267
+  abdominal_wall_cavity:
+    AP: 0.8457
+  liver:
+    AP: 0.8226
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4501
+  peritoneum:
+    AP: 0.4920
+  gut:
+    AP: 0.2981
+  specimen_bag:
+    AP: 0.9251
+  null_target:
+    AP: 0.3053
+Learning rates: ['0.000024', '0.000024', '0.000244', '0.000244']
+Task weights: {'verb': 0.32385724252396275, 'instrument': 0.2654189968047138, 'target': 0.4107237606713235, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.4014, mAP: 0.7351
+Instrument - Loss: 0.2766, mAP: 0.9190
+Target - Loss: 0.4375, mAP: 0.5585
+Triplet - Loss: 0.9320, mAP: 0.3795
+--------------------------------------------------
+New best triplet mAP: 0.3795
+--------------------------------------------------
+Validation Results - Epoch 11/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3690
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0763
+  grasper,grasp,cystic_duct:
+    AP: 0.0291
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2614
+  grasper,grasp,omentum:
+    AP: 0.0016
+  grasper,grasp,specimen_bag:
+    AP: 0.9329
+  grasper,pack,gallbladder:
+    AP: 0.2772
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9517
+  grasper,retract,gut:
+    AP: 0.2856
+  grasper,retract,liver:
+    AP: 0.8204
+  grasper,retract,omentum:
+    AP: 0.5693
+  grasper,retract,peritoneum:
+    AP: 0.3851
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.9250
+  bipolar,coagulate,blood_vessel:
+    AP: 0.0833
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2917
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1365
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9232
+  bipolar,coagulate,omentum:
+    AP: 0.6893
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0172
+  bipolar,dissect,cystic_duct:
+    AP: 0.0040
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0075
+  hook,coagulate,liver:
+    AP: 0.0584
+  hook,coagulate,omentum:
+    AP: 0.0370
+  hook,dissect,cystic_artery:
+    AP: 0.2514
+  hook,dissect,cystic_duct:
+    AP: 0.3468
+  hook,dissect,cystic_plate:
+    AP: 0.2179
+  hook,dissect,gallbladder:
+    AP: 0.8047
+  hook,dissect,omentum:
+    AP: 0.2548
+  hook,dissect,peritoneum:
+    AP: 0.0435
+  hook,retract,gallbladder:
+    AP: 0.4755
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0069
+  scissors,cut,blood_vessel:
+    AP: 0.2500
+  scissors,cut,cystic_artery:
+    AP: 0.4059
+  scissors,cut,cystic_duct:
+    AP: 0.5454
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0342
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.5735
+  clipper,clip,cystic_duct:
+    AP: 0.4843
+  irrigator,aspirate,fluid:
+    AP: 0.9211
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 0.5000
+  irrigator,irrigate,liver:
+    AP: 0.0625
+  irrigator,retract,gallbladder:
+    AP: 0.1667
+  irrigator,retract,liver:
+    AP: 0.1019
+  irrigator,retract,omentum:
+    AP: 0.0134
+  grasper,null_verb,null_target:
+    AP: 0.3664
+  bipolar,null_verb,null_target:
+    AP: 0.2073
+  hook,null_verb,null_target:
+    AP: 0.5234
+  scissors,null_verb,null_target:
+    AP: 1.0000
+  clipper,null_verb,null_target:
+    AP: 0.0449
+  irrigator,null_verb,null_target:
+    AP: 0.0827
+INSTRUMENT METRICS:
+  Overall mAP: 0.9099
+  grasper:
+    AP: 0.9932
+  bipolar:
+    AP: 0.9311
+  hook:
+    AP: 0.9588
+  scissors:
+    AP: 0.8148
+  clipper:
+    AP: 0.9716
+  irrigator:
+    AP: 0.7897
+VERB METRICS:
+  Overall mAP: 0.7152
+  grasp:
+    AP: 0.7884
+  retract:
+    AP: 0.9791
+  dissect:
+    AP: 0.9001
+  coagulate:
+    AP: 0.8377
+  clip:
+    AP: 0.9044
+  cut:
+    AP: 0.9039
+  aspirate:
+    AP: 0.9211
+  irrigate:
+    AP: 0.2955
+  pack:
+    AP: 0.2772
+  null_verb:
+    AP: 0.3446
+TARGET METRICS:
+  Overall mAP: 0.5428
+  gallbladder:
+    AP: 0.9599
+  cystic_plate:
+    AP: 0.1692
+  cystic_duct:
+    AP: 0.3320
+  cystic_artery:
+    AP: 0.3976
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3714
+  fluid:
+    AP: 0.9211
+  abdominal_wall_cavity:
+    AP: 0.7185
+  liver:
+    AP: 0.8327
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4612
+  peritoneum:
+    AP: 0.3297
+  gut:
+    AP: 0.2856
+  specimen_bag:
+    AP: 0.9329
+  null_target:
+    AP: 0.3446
+Learning rates: ['0.000015', '0.000015', '0.000151', '0.000151']
+Task weights: {'verb': 0.3251593129613612, 'instrument': 0.2624769779721493, 'target': 0.4123637090664895, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.3949, mAP: 0.7152
+Instrument - Loss: 0.2693, mAP: 0.9099
+Target - Loss: 0.4343, mAP: 0.5428
+Triplet - Loss: 0.9316, mAP: 0.3690
+--------------------------------------------------
+Validation Results - Epoch 12/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3721
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0213
+  grasper,grasp,cystic_duct:
+    AP: 0.0960
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2995
+  grasper,grasp,omentum:
+    AP: 0.0018
+  grasper,grasp,specimen_bag:
+    AP: 0.9342
+  grasper,pack,gallbladder:
+    AP: 0.2806
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9510
+  grasper,retract,gut:
+    AP: 0.2859
+  grasper,retract,liver:
+    AP: 0.8260
+  grasper,retract,omentum:
+    AP: 0.5666
+  grasper,retract,peritoneum:
+    AP: 0.3911
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8278
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1111
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2917
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1963
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9413
+  bipolar,coagulate,omentum:
+    AP: 0.6620
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0312
+  bipolar,dissect,cystic_duct:
+    AP: 0.0079
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0061
+  hook,coagulate,liver:
+    AP: 0.0304
+  hook,coagulate,omentum:
+    AP: 0.0357
+  hook,dissect,cystic_artery:
+    AP: 0.2724
+  hook,dissect,cystic_duct:
+    AP: 0.3654
+  hook,dissect,cystic_plate:
+    AP: 0.1225
+  hook,dissect,gallbladder:
+    AP: 0.7989
+  hook,dissect,omentum:
+    AP: 0.2634
+  hook,dissect,peritoneum:
+    AP: 0.0370
+  hook,retract,gallbladder:
+    AP: 0.4892
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0092
+  scissors,cut,blood_vessel:
+    AP: 0.1667
+  scissors,cut,cystic_artery:
+    AP: 0.4200
+  scissors,cut,cystic_duct:
+    AP: 0.6188
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0259
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.5735
+  clipper,clip,cystic_duct:
+    AP: 0.5221
+  irrigator,aspirate,fluid:
+    AP: 0.9078
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 0.3333
+  irrigator,retract,gallbladder:
+    AP: 0.1429
+  irrigator,retract,liver:
+    AP: 0.1435
+  irrigator,retract,omentum:
+    AP: 0.0140
+  grasper,null_verb,null_target:
+    AP: 0.3960
+  bipolar,null_verb,null_target:
+    AP: 0.1566
+  hook,null_verb,null_target:
+    AP: 0.5630
+  scissors,null_verb,null_target:
+    AP: 0.3333
+  clipper,null_verb,null_target:
+    AP: 0.0548
+  irrigator,null_verb,null_target:
+    AP: 0.0795
+INSTRUMENT METRICS:
+  Overall mAP: 0.9188
+  grasper:
+    AP: 0.9903
+  bipolar:
+    AP: 0.9298
+  hook:
+    AP: 0.9611
+  scissors:
+    AP: 0.8487
+  clipper:
+    AP: 0.9868
+  irrigator:
+    AP: 0.7960
+VERB METRICS:
+  Overall mAP: 0.7572
+  grasp:
+    AP: 0.7941
+  retract:
+    AP: 0.9776
+  dissect:
+    AP: 0.9026
+  coagulate:
+    AP: 0.8585
+  clip:
+    AP: 0.9103
+  cut:
+    AP: 0.9374
+  aspirate:
+    AP: 0.9078
+  irrigate:
+    AP: 0.6667
+  pack:
+    AP: 0.2806
+  null_verb:
+    AP: 0.3368
+TARGET METRICS:
+  Overall mAP: 0.5436
+  gallbladder:
+    AP: 0.9595
+  cystic_plate:
+    AP: 0.1203
+  cystic_duct:
+    AP: 0.3832
+  cystic_artery:
+    AP: 0.3990
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3674
+  fluid:
+    AP: 0.9078
+  abdominal_wall_cavity:
+    AP: 0.7436
+  liver:
+    AP: 0.8401
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4637
+  peritoneum:
+    AP: 0.3257
+  gut:
+    AP: 0.2859
+  specimen_bag:
+    AP: 0.9342
+  null_target:
+    AP: 0.3368
+Learning rates: ['0.000008', '0.000008', '0.000080', '0.000080']
+Task weights: {'verb': 0.31512854520346656, 'instrument': 0.265156192614147, 'target': 0.4197152621823865, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.3913, mAP: 0.7572
+Instrument - Loss: 0.2659, mAP: 0.9188
+Target - Loss: 0.4295, mAP: 0.5436
+Triplet - Loss: 0.9304, mAP: 0.3721
+--------------------------------------------------
+Validation Results - Epoch 13/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3774
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0405
+  grasper,grasp,cystic_duct:
+    AP: 0.2633
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2932
+  grasper,grasp,omentum:
+    AP: 0.0018
+  grasper,grasp,specimen_bag:
+    AP: 0.9362
+  grasper,pack,gallbladder:
+    AP: 0.2783
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9534
+  grasper,retract,gut:
+    AP: 0.2940
+  grasper,retract,liver:
+    AP: 0.8150
+  grasper,retract,omentum:
+    AP: 0.5980
+  grasper,retract,peritoneum:
+    AP: 0.5119
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8667
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1000
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2917
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1400
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9393
+  bipolar,coagulate,omentum:
+    AP: 0.6567
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0196
+  bipolar,dissect,cystic_duct:
+    AP: 0.0045
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0074
+  hook,coagulate,liver:
+    AP: 0.0382
+  hook,coagulate,omentum:
+    AP: 0.0400
+  hook,dissect,cystic_artery:
+    AP: 0.2688
+  hook,dissect,cystic_duct:
+    AP: 0.3650
+  hook,dissect,cystic_plate:
+    AP: 0.1319
+  hook,dissect,gallbladder:
+    AP: 0.7981
+  hook,dissect,omentum:
+    AP: 0.2535
+  hook,dissect,peritoneum:
+    AP: 0.0526
+  hook,retract,gallbladder:
+    AP: 0.4490
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0079
+  scissors,cut,blood_vessel:
+    AP: 0.1667
+  scissors,cut,cystic_artery:
+    AP: 0.4131
+  scissors,cut,cystic_duct:
+    AP: 0.5564
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0348
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.5517
+  clipper,clip,cystic_duct:
+    AP: 0.5134
+  irrigator,aspirate,fluid:
+    AP: 0.9303
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 0.3333
+  irrigator,retract,gallbladder:
+    AP: 0.1667
+  irrigator,retract,liver:
+    AP: 0.0800
+  irrigator,retract,omentum:
+    AP: 0.0162
+  grasper,null_verb,null_target:
+    AP: 0.3608
+  bipolar,null_verb,null_target:
+    AP: 0.1574
+  hook,null_verb,null_target:
+    AP: 0.5404
+  scissors,null_verb,null_target:
+    AP: 0.5000
+  clipper,null_verb,null_target:
+    AP: 0.0533
+  irrigator,null_verb,null_target:
+    AP: 0.0780
+INSTRUMENT METRICS:
+  Overall mAP: 0.9203
+  grasper:
+    AP: 0.9902
+  bipolar:
+    AP: 0.9375
+  hook:
+    AP: 0.9583
+  scissors:
+    AP: 0.8318
+  clipper:
+    AP: 0.9851
+  irrigator:
+    AP: 0.8190
+VERB METRICS:
+  Overall mAP: 0.7600
+  grasp:
+    AP: 0.7983
+  retract:
+    AP: 0.9779
+  dissect:
+    AP: 0.9052
+  coagulate:
+    AP: 0.8688
+  clip:
+    AP: 0.8972
+  cut:
+    AP: 0.9274
+  aspirate:
+    AP: 0.9303
+  irrigate:
+    AP: 0.7000
+  pack:
+    AP: 0.2783
+  null_verb:
+    AP: 0.3169
+TARGET METRICS:
+  Overall mAP: 0.5604
+  gallbladder:
+    AP: 0.9604
+  cystic_plate:
+    AP: 0.1124
+  cystic_duct:
+    AP: 0.3813
+  cystic_artery:
+    AP: 0.3917
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3710
+  fluid:
+    AP: 0.9303
+  abdominal_wall_cavity:
+    AP: 0.8490
+  liver:
+    AP: 0.8313
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4854
+  peritoneum:
+    AP: 0.4246
+  gut:
+    AP: 0.2940
+  specimen_bag:
+    AP: 0.9362
+  null_target:
+    AP: 0.3169
+Learning rates: ['0.000004', '0.000004', '0.000035', '0.000035']
+Task weights: {'verb': 0.31793632417778844, 'instrument': 0.2679912862701792, 'target': 0.41407238955203235, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.3898, mAP: 0.7600
+Instrument - Loss: 0.2657, mAP: 0.9203
+Target - Loss: 0.4272, mAP: 0.5604
+Triplet - Loss: 0.9297, mAP: 0.3774
+--------------------------------------------------
+Validation Results - Epoch 14/14:
+TRIPLET METRICS:
+  Overall mAP: 0.3756
+  grasper,dissect,cystic_plate:
+    AP: 0.0000
+  grasper,dissect,gallbladder:
+    AP: 0.0602
+  grasper,grasp,cystic_duct:
+    AP: 0.2660
+  grasper,grasp,cystic_plate:
+    AP: 0.0000
+  grasper,grasp,gallbladder:
+    AP: 0.2507
+  grasper,grasp,omentum:
+    AP: 0.0018
+  grasper,grasp,specimen_bag:
+    AP: 0.9347
+  grasper,pack,gallbladder:
+    AP: 0.2799
+  grasper,retract,cystic_duct:
+    AP: 0.0000
+  grasper,retract,cystic_plate:
+    AP: 0.0000
+  grasper,retract,gallbladder:
+    AP: 0.9531
+  grasper,retract,gut:
+    AP: 0.2955
+  grasper,retract,liver:
+    AP: 0.8212
+  grasper,retract,omentum:
+    AP: 0.6040
+  grasper,retract,peritoneum:
+    AP: 0.5654
+  bipolar,coagulate,abdominal_wall_cavity:
+    AP: 0.8500
+  bipolar,coagulate,blood_vessel:
+    AP: 0.1000
+  bipolar,coagulate,cystic_artery:
+    AP: 0.2917
+  bipolar,coagulate,cystic_pedicle:
+    AP: 0.0000
+  bipolar,coagulate,cystic_plate:
+    AP: 0.1219
+  bipolar,coagulate,gallbladder:
+    AP: 0.0000
+  bipolar,coagulate,liver:
+    AP: 0.9392
+  bipolar,coagulate,omentum:
+    AP: 0.7001
+  bipolar,dissect,adhesion:
+    AP: 0.0000
+  bipolar,dissect,cystic_artery:
+    AP: 0.0256
+  bipolar,dissect,cystic_duct:
+    AP: 0.0083
+  bipolar,dissect,cystic_plate:
+    AP: 0.0000
+  bipolar,dissect,gallbladder:
+    AP: 0.0000
+  bipolar,dissect,omentum:
+    AP: 0.0000
+  bipolar,grasp,liver:
+    AP: 0.0000
+  bipolar,retract,gallbladder:
+    AP: 0.0000
+  bipolar,retract,liver:
+    AP: 0.0000
+  hook,coagulate,cystic_duct:
+    AP: 1.0000
+  hook,coagulate,gallbladder:
+    AP: 0.0080
+  hook,coagulate,liver:
+    AP: 0.0395
+  hook,coagulate,omentum:
+    AP: 0.0417
+  hook,dissect,cystic_artery:
+    AP: 0.2700
+  hook,dissect,cystic_duct:
+    AP: 0.3666
+  hook,dissect,cystic_plate:
+    AP: 0.1449
+  hook,dissect,gallbladder:
+    AP: 0.7976
+  hook,dissect,omentum:
+    AP: 0.2630
+  hook,dissect,peritoneum:
+    AP: 0.0500
+  hook,retract,gallbladder:
+    AP: 0.4783
+  hook,retract,liver:
+    AP: 0.0000
+  scissors,coagulate,omentum:
+    AP: 0.0081
+  scissors,cut,blood_vessel:
+    AP: 0.1667
+  scissors,cut,cystic_artery:
+    AP: 0.4255
+  scissors,cut,cystic_duct:
+    AP: 0.5767
+  scissors,cut,liver:
+    AP: 0.0000
+  scissors,cut,peritoneum:
+    AP: 0.0000
+  scissors,dissect,gallbladder:
+    AP: 0.0000
+  scissors,dissect,omentum:
+    AP: 0.0252
+  clipper,clip,blood_vessel:
+    AP: 1.0000
+  clipper,clip,cystic_artery:
+    AP: 0.5531
+  clipper,clip,cystic_duct:
+    AP: 0.5352
+  irrigator,aspirate,fluid:
+    AP: 0.9306
+  irrigator,dissect,cystic_pedicle:
+    AP: 0.0000
+  irrigator,dissect,omentum:
+    AP: 0.0000
+  irrigator,irrigate,abdominal_wall_cavity:
+    AP: 1.0000
+  irrigator,irrigate,liver:
+    AP: 0.3333
+  irrigator,retract,gallbladder:
+    AP: 0.1667
+  irrigator,retract,liver:
+    AP: 0.0789
+  irrigator,retract,omentum:
+    AP: 0.0148
+  grasper,null_verb,null_target:
+    AP: 0.3547
+  bipolar,null_verb,null_target:
+    AP: 0.1635
+  hook,null_verb,null_target:
+    AP: 0.5277
+  scissors,null_verb,null_target:
+    AP: 0.2500
+  clipper,null_verb,null_target:
+    AP: 0.0573
+  irrigator,null_verb,null_target:
+    AP: 0.0851
+INSTRUMENT METRICS:
+  Overall mAP: 0.9221
+  grasper:
+    AP: 0.9888
+  bipolar:
+    AP: 0.9359
+  hook:
+    AP: 0.9578
+  scissors:
+    AP: 0.8478
+  clipper:
+    AP: 0.9853
+  irrigator:
+    AP: 0.8167
+VERB METRICS:
+  Overall mAP: 0.7573
+  grasp:
+    AP: 0.7967
+  retract:
+    AP: 0.9770
+  dissect:
+    AP: 0.9001
+  coagulate:
+    AP: 0.8684
+  clip:
+    AP: 0.9008
+  cut:
+    AP: 0.9478
+  aspirate:
+    AP: 0.9306
+  irrigate:
+    AP: 0.6429
+  pack:
+    AP: 0.2799
+  null_verb:
+    AP: 0.3290
+TARGET METRICS:
+  Overall mAP: 0.5668
+  gallbladder:
+    AP: 0.9589
+  cystic_plate:
+    AP: 0.1187
+  cystic_duct:
+    AP: 0.3830
+  cystic_artery:
+    AP: 0.3973
+  cystic_pedicle:
+    AP: 0.0000
+  blood_vessel:
+    AP: 0.3704
+  fluid:
+    AP: 0.9306
+  abdominal_wall_cavity:
+    AP: 0.8467
+  liver:
+    AP: 0.8412
+  adhesion:
+    AP: 0.0000
+  omentum:
+    AP: 0.4951
+  peritoneum:
+    AP: 0.4677
+  gut:
+    AP: 0.2955
+  specimen_bag:
+    AP: 0.9347
+  null_target:
+    AP: 0.3290
+Learning rates: ['0.000002', '0.000002', '0.000020', '0.000020']
+Task weights: {'verb': 0.32005208317201056, 'instrument': 0.2684674351200969, 'target': 0.4114804817078925, 'triplet': 1.5}
+Training Results:
+Verb - Loss: 0.3888, mAP: 0.7573
+Instrument - Loss: 0.2626, mAP: 0.9221
+Target - Loss: 0.4262, mAP: 0.5668
+Triplet - Loss: 0.9287, mAP: 0.3756
+--------------------------------------------------

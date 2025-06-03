@@ -94,7 +94,7 @@ def visualize_border_detection(video_path, output_path, threshold=20, margin=5):
 
 def main():
     # Directory path
-    CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
+    CLIPS_DIR = r"05_datasets_dir/UKE/clips"
     OUTPUT_PATH = r"border_detection.png"
 
     # Get the first video file from the directory

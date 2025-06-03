@@ -1,7 +1,7 @@
 random_seed: 42
 min_occurrences: 100 # 
-clip_length: 16
-batch_size: 2
+clip_length: 16 
+batch_size: 2 # for image dataset set to 32
 frame_width: 480 
 frame_height: 270 
 num_epochs: 20 # multiplied by 0.7 during training
@@ -12,9 +12,9 @@ weight_decay: 0.001 # weight decay for optimizer
 attention_module_common_dim: 256
 hidden_layer_dim: 512
 warmup_epochs: 5 # number of epochs
-consistency_loss_weight: 0.5 # 
-temperature: 1.5
+consistency_loss_weight: 0.0
+temperature: 3.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 
-guidance_scale: 1.0
+guidance_scale: 1.0 # changable during inference
 fpn_out_channels: 256 # used for FPN module - object detection only -

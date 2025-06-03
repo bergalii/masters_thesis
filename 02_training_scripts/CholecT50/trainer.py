@@ -7,6 +7,7 @@ from torchvision.models.video.swin_transformer import swin3d_s, Swin3D_S_Weights
 from recognition import Recognition
 import copy
 from modules import AttentionModule, MultiTaskHead
+import math
 
 
 class MultiTaskSelfDistillationTrainer:
@@ -416,7 +417,11 @@ class MultiTaskSelfDistillationTrainer:
             self._update_task_weights(val_metrics)
 
             if mode == "student":
-                self.alpha = min(1.0, (epoch + 1) / self.warmup_epochs)
+                # self.alpha = min(1.0, (epoch + 1) / self.warmup_epochs)
+                self.alpha = min(
+                    0.8,
+                    0.5 * (1 - math.cos(math.pi * (epoch + 1) / self.warmup_epochs)),
+                )
 
             # Log metrics
             self.logger.info("Training Results:")
@@ -545,28 +550,27 @@ class MultiTaskSelfDistillationTrainer:
                         for task, logits in task_logits.items()
                     }
 
-                    # # Get guidance from individual tasks
-                    # guidance_inst = torch.matmul(
-                    #     task_probabilities["instrument"], self.MI
-                    # )
-                    # guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
-                    # guidance_target = torch.matmul(
-                    #     task_probabilities["target"], self.MT
-                    # )
+                    # Get guidance from individual tasks
+                    guidance_inst = torch.matmul(
+                        task_probabilities["instrument"], self.MI
+                    )
+                    guidance_verb = torch.matmul(task_probabilities["verb"], self.MV)
+                    guidance_target = torch.matmul(
+                        task_probabilities["target"], self.MT
+                    )
 
-                    # # Combine guidance outputs
-                    # guidance = guidance_inst * guidance_verb * guidance_target
+                    # Combine guidance outputs
+                    guidance = guidance_inst * guidance_verb * guidance_target
 
-                    # # Apply guidance with a scale factor
-                    # guided_triplet_probs = (
-                    #     1 - self.guidance_scale
-                    # ) * task_probabilities["triplet"] + self.guidance_scale * (
-                    #     guidance * task_probabilities["triplet"]
-                    # )
+                    # Apply guidance with a scale factor
+                    guided_triplet_probs = (
+                        1 - self.guidance_scale
+                    ) * task_probabilities["triplet"] + self.guidance_scale * (
+                        guidance * task_probabilities["triplet"]
+                    )
 
                     # # Update with triplet predictions and the label for the video
-                    # predictions = guided_triplet_probs.cpu().numpy()
-                    predictions = task_probabilities["triplet"].cpu().numpy()
+                    predictions = guided_triplet_probs.cpu().numpy()
                     labels = batch_labels["triplet"][b].unsqueeze(0).cpu().numpy()
 
                     # Update the recognizer with the current video
@@ -624,34 +628,34 @@ class MultiTaskSelfDistillationTrainer:
             train_components: Boolean flag to enable/disable component training phase
         """
 
-        self.logger.info("Training teacher model...")
-        total_trainable_params = sum(
-            p.numel() for p in self.teacher_model.parameters() if p.requires_grad
-        )
-        self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
-        self.logger.info("-" * 50)
+        # self.logger.info("Training teacher model...")
+        # total_trainable_params = sum(
+        #     p.numel() for p in self.teacher_model.parameters() if p.requires_grad
+        # )
+        # self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
+        # self.logger.info("-" * 50)
 
-        if train_components:
-            # Phase 1: Train component tasks only
-            self.logger.info("Training component tasks for the teacher model...")
+        # if train_components:
+        #     # Phase 1: Train component tasks only
+        #     self.logger.info("Training component tasks for the teacher model...")
 
-            # Freeze the triplet head parameters to prevent updates
-            for param in self.teacher_model.triplet_head.parameters():
-                param.requires_grad = False
+        #     # Freeze the triplet head parameters to prevent updates
+        #     for param in self.teacher_model.triplet_head.parameters():
+        #         param.requires_grad = False
 
-            for param in self.teacher_model.attention_module.parameters():
-                param.requires_grad = False
+        #     for param in self.teacher_model.attention_module.parameters():
+        #         param.requires_grad = False
 
-            self._train_model_components(self.teacher_model, self.teacher_optimizer)
+        #     self._train_model_components(self.teacher_model, self.teacher_optimizer)
 
-            # Unfreeze triplet head and attention module after component training
-            for param in self.teacher_model.triplet_head.parameters():
-                param.requires_grad = True
+        #     # Unfreeze triplet head and attention module after component training
+        #     for param in self.teacher_model.triplet_head.parameters():
+        #         param.requires_grad = True
 
-            for param in self.teacher_model.attention_module.parameters():
-                param.requires_grad = True
+        #     for param in self.teacher_model.attention_module.parameters():
+        #         param.requires_grad = True
 
-        # Phase 2: Train the whole teacher model
+        # # Phase 2: Train the whole teacher model
         self._train_model(
             self.teacher_model,
             self.teacher_optimizer,
@@ -660,43 +664,46 @@ class MultiTaskSelfDistillationTrainer:
         )
 
         # After teacher training completes, load the best teacher model for distillation
-        best_teacher_path = f"{self.dir_name}/best_model_teacher.pth"
-        self.logger.info(
-            f"Loading best teacher model from {best_teacher_path} for distillation..."
-        )
-        # Load the best teacher model weights
-        teacher_state_dict = torch.load(best_teacher_path)
-        self.teacher_model.load_state_dict(teacher_state_dict)
-        self.teacher_model.eval()
+        # best_teacher_path = f"{self.dir_name}/best_model_teacher.pth"
+        # best_teacher_path = (
+        #     "04_models_dir/training_20250505_211505/best_model_teacher.pth"
+        # )
+        # self.logger.info(
+        #     f"Loading best teacher model from {best_teacher_path} for distillation..."
+        # )
+        # # Load the best teacher model weights
+        # teacher_state_dict = torch.load(best_teacher_path)
+        # self.teacher_model.load_state_dict(teacher_state_dict)
+        # self.teacher_model.eval()
 
-        # Train the student model
-        self.logger.info("Training the student model...")
-        trainable_params_student = sum(
-            p.numel() for p in self.student_model.parameters() if p.requires_grad
-        )
-        self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
+        # # Train the student model
+        # self.logger.info("Training the student model...")
+        # trainable_params_student = sum(
+        #     p.numel() for p in self.student_model.parameters() if p.requires_grad
+        # )
+        # self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
 
-        if train_components:
-            # Freeze the triplet head parameters to prevent updates
-            for param in self.student_model.triplet_head.parameters():
-                param.requires_grad = False
+        # if train_components:
+        #     # Freeze the triplet head parameters to prevent updates
+        #     for param in self.student_model.triplet_head.parameters():
+        #         param.requires_grad = False
 
-            for param in self.student_model.attention_module.parameters():
-                param.requires_grad = False
+        #     for param in self.student_model.attention_module.parameters():
+        #         param.requires_grad = False
 
-            self._train_model_components(self.student_model, self.student_optimizer)
+        #     self._train_model_components(self.student_model, self.student_optimizer)
 
-            # Unfreeze triplet head and attention module after component training
-            for param in self.student_model.triplet_head.parameters():
-                param.requires_grad = True
+        #     # Unfreeze triplet head and attention module after component training
+        #     for param in self.student_model.triplet_head.parameters():
+        #         param.requires_grad = True
 
-            for param in self.student_model.attention_module.parameters():
-                param.requires_grad = True
+        #     for param in self.student_model.attention_module.parameters():
+        #         param.requires_grad = True
 
-        # Train the full student model
-        self._train_model(
-            self.student_model,
-            self.student_optimizer,
-            self.student_scheduler,
-            "student",
-        )
+        # # Train the full student model
+        # self._train_model(
+        #     self.student_model,
+        #     self.student_optimizer,
+        #     self.student_scheduler,
+        #     "student",
+        # )
