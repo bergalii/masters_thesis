@@ -12,14 +12,12 @@ from pathlib import Path
 
 
 def main():
-    # CLIPS_DIR = r"05_datasets_dir/CholecT50/videos"
-    # ANNOTATIONS_PATH = r"05_datasets_dir/CholecT50/annotations.csv"
     CLIPS_DIR = r"05_datasets_dir/UKE/clips"
     ANNOTATIONS_PATH = r"05_datasets_dir/UKE/gt.csv"
     CONFIGS_PATH = r"02_training_scripts/CholecT50/configs.yaml"
 
     dir_name, logger = setup_logging("training")
-    model_dir = Path(f"04_models_dir/{dir_name}")
+    model_dir = Path(f"04_models_dir/{dir_name}_UKE")
     model_dir.mkdir(exist_ok=True)
 
     torch.cuda.set_device(1)
@@ -39,7 +37,6 @@ def main():
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
         min_occurrences=configs["min_occurrences"],
-        # cross_val_fold=configs["val_split"],
     )
     val_dataset = MultiTaskVideoDataset(
         clips_dir=CLIPS_DIR,
@@ -51,7 +48,6 @@ def main():
         frame_width=configs["frame_width"],
         frame_height=configs["frame_height"],
         min_occurrences=configs["min_occurrences"],
-        # cross_val_fold=configs["val_split"],
     )
     train_loader = DataLoader(
         train_dataset, batch_size=configs["batch_size"], shuffle=True

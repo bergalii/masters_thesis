@@ -24,7 +24,6 @@ class MultiTaskVideoDataset(Dataset):
         frame_width: int,
         frame_height: int,
         min_occurrences: int,
-        cross_val_fold: int = None,
     ):
         self.clips_dir = clips_dir
         self.clip_length = clip_length
@@ -33,7 +32,6 @@ class MultiTaskVideoDataset(Dataset):
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.annotations = pd.read_csv(annotations_path)
-        self.cross_val_fold = cross_val_fold
 
         # Extract video IDs from file names
         self.annotations["video_id"] = self.annotations["file_name"].apply(
@@ -43,13 +41,7 @@ class MultiTaskVideoDataset(Dataset):
         # First initialize global mappings before splitting the dataset
         self._initialize_global_mappings()
 
-        # If using cross-validation, use the specified fold
-        if cross_val_fold is not None:
-            split_indices = self._create_cross_val_split(cross_val_fold)
-        else:
-            # Otherwise use the stratified splits
-            split_indices = self._create_stratified_split(train_ratio)
-
+        split_indices = self._create_stratified_split(train_ratio)
         self.annotations = self.annotations.iloc[split_indices].reset_index(drop=True)
 
         # Balance the training set based on minimum occurences for each triplet
@@ -104,7 +96,7 @@ class MultiTaskVideoDataset(Dataset):
         )
 
     def _initialize_global_mappings(self):
-        """Initialize global mappings for all possible triplets from the annotations"""
+        """Initialize global mappings for all possible triplets from the CSV data"""
 
         # Initialize mapping dictionaries
         self.label_mappings = {
@@ -114,210 +106,112 @@ class MultiTaskVideoDataset(Dataset):
             "triplet": {},
         }
 
-        # Create mappings from original (non-continuous) IDs to continuous indices
-        self.triplet_to_index = {}  # Original ID -> continuous index
-        self.index_to_triplet = {}  # Continuous index -> original ID
-
         # Initialize triplet to IVT mapping
         self.triplet_to_ivt = {}
 
-        # First pass: Collect ALL unique IDs from all rows
-        all_triplet_ids = set()
-        inst_ids = set()
-        verb_ids = set()
-        target_ids = set()
-
+        # Process annotations to extract mappings from CSV data
         for _, row in self.annotations.iterrows():
             # Convert string lists to actual lists
-            for col in [
-                "instrument_label",
-                "verb_label",
-                "target_label",
-                "action_label",
-            ]:
-                if isinstance(row[col], str):
-                    row[col] = ast.literal_eval(row[col])
+            action_labels = ast.literal_eval(row["action_label"])
+            action_names = ast.literal_eval(row["action_label_names"])
+            instrument_labels = ast.literal_eval(row["instrument_label"])
+            instrument_names = ast.literal_eval(row["instrument_label_names"])
+            verb_labels = ast.literal_eval(row["verb_label"])
+            verb_names = ast.literal_eval(row["verb_label_names"])
+            target_labels = ast.literal_eval(row["target_label"])
+            target_names = ast.literal_eval(row["target_label_names"])
 
-            # Collect ALL IDs, regardless of whether names exist
-            all_triplet_ids.update(row["action_label"])
-            inst_ids.update(row["instrument_label"])
-            verb_ids.update(row["verb_label"])
-            target_ids.update(row["target_label"])
+            # Parse each action name to extract instrument, verb, target
+            for action_id, action_name in zip(action_labels, action_names):
+                # Store the action name
+                self.label_mappings["triplet"][action_id] = action_name
 
-        # Second pass: Extract names and create mappings where available
-        for _, row in self.annotations.iterrows():
-            # Extract names from separate columns (only if they exist)
-            if "instrument_label_names" in row and row["instrument_label_names"]:
-                instrument_names = ast.literal_eval(row["instrument_label_names"])
-                verb_names = ast.literal_eval(row["verb_label_names"])
-                target_names = ast.literal_eval(row["target_label_names"])
-                action_names = ast.literal_eval(row["action_label_names"])
+                # Parse the action name to get instrument, verb, target
+                parts = action_name.split(",")
+                instrument_name = parts[0]
+                verb_name = parts[1]
+                target_name = parts[2]
 
-                # Map individual component names to their IDs
-                for i, (inst_name, inst_id) in enumerate(
-                    zip(instrument_names, row["instrument_label"])
-                ):
-                    self.label_mappings["instrument"][inst_id] = inst_name
+                # Find the corresponding IDs
+                instrument_id = instrument_names.index(instrument_name)
+                verb_id = verb_names.index(verb_name)
+                target_id = target_names.index(target_name)
 
-                for i, (verb_name, verb_id) in enumerate(
-                    zip(verb_names, row["verb_label"])
-                ):
-                    self.label_mappings["verb"][verb_id] = verb_name
+                # Store [instrument, verb, target] mapping
+                self.triplet_to_ivt[action_id] = [
+                    instrument_labels[instrument_id],
+                    verb_labels[verb_id],
+                    target_labels[target_id],
+                ]
 
-                for i, (target_name, target_id) in enumerate(
-                    zip(target_names, row["target_label"])
-                ):
-                    self.label_mappings["target"][target_id] = target_name
+            # Create mappings for individual components
+            for inst_id, inst_name in zip(instrument_labels, instrument_names):
+                self.label_mappings["instrument"][inst_id] = inst_name
 
-                # Map action names to their IDs
-                for i, (action_name, action_id) in enumerate(
-                    zip(action_names, row["action_label"])
-                ):
-                    self.label_mappings["triplet"][action_id] = action_name
+            for verb_id, verb_name in zip(verb_labels, verb_names):
+                self.label_mappings["verb"][verb_id] = verb_name
 
-        # Create continuous mapping for ALL triplet IDs found in annotations
-        all_original_triplet_ids = sorted(list(all_triplet_ids))
-
-        for continuous_idx, original_id in enumerate(all_original_triplet_ids):
-            self.triplet_to_index[original_id] = continuous_idx
-            self.index_to_triplet[continuous_idx] = original_id
-
-        # Create triplet to IVT mapping from the annotations
-        for _, row in self.annotations.iterrows():
-            # Parse the action names to extract I,V,T components
-            if "action_label_names" in row and row["action_label_names"]:
-                action_names = ast.literal_eval(row["action_label_names"])
-                action_labels = row["action_label"]
-
-                for action_name, action_id in zip(action_names, action_labels):
-                    if action_id in self.triplet_to_index:
-                        continuous_idx = self.triplet_to_index[action_id]
-
-                        # Parse the action name to get I,V,T components
-                        # Format: "Instrument,Verb,Target"
-                        parts = action_name.split(",")
-                        if len(parts) == 3:
-                            inst_name, verb_name, target_name = parts
-
-                            # Find the IDs for these components
-                            inst_id = None
-                            verb_id = None
-                            target_id = None
-
-                            # Find instrument ID
-                            for id, name in self.label_mappings["instrument"].items():
-                                if name == inst_name:
-                                    inst_id = id
-                                    break
-
-                            # Find verb ID
-                            for id, name in self.label_mappings["verb"].items():
-                                if name == verb_name:
-                                    verb_id = id
-                                    break
-
-                            # Find target ID
-                            for id, name in self.label_mappings["target"].items():
-                                if name == target_name:
-                                    target_id = id
-                                    break
-
-                            if (
-                                inst_id is not None
-                                and verb_id is not None
-                                and target_id is not None
-                            ):
-                                self.triplet_to_ivt[continuous_idx] = [
-                                    inst_id,
-                                    verb_id,
-                                    target_id,
-                                ]
+            for target_id, target_name in zip(target_labels, target_names):
+                self.label_mappings["target"][target_id] = target_name
 
         # Determine the number of classes for each category
+        all_instrument_ids = []
+        all_verb_ids = []
+        all_target_ids = []
+        all_action_ids = []
+
+        for _, row in self.annotations.iterrows():
+            all_instrument_ids.extend(ast.literal_eval(row["instrument_label"]))
+            all_verb_ids.extend(ast.literal_eval(row["verb_label"]))
+            all_target_ids.extend(ast.literal_eval(row["target_label"]))
+            all_action_ids.extend(ast.literal_eval(row["action_label"]))
+
         self.num_classes = {
-            "instrument": max(inst_ids) + 1 if inst_ids else 0,
-            "verb": max(verb_ids) + 1 if verb_ids else 0,
-            "target": max(target_ids) + 1 if target_ids else 0,
-            "triplet": len(self.triplet_to_index),
+            "instrument": max(all_instrument_ids) + 1,
+            "verb": max(all_verb_ids) + 1,
+            "target": max(all_target_ids) + 1,
+            "triplet": max(all_action_ids) + 1,
         }
-
-        # Create reverse mapping from continuous index to original triplet ID
-        self.triplet_continuous_to_original = {
-            v: k for k, v in self.triplet_to_index.items()
-        }
-
-    def _create_cross_val_split(self, fold: int) -> np.ndarray:
-        """
-        Create a split based on the cross-validation fold.
-
-        Args:
-            fold: Which cross-validation fold to use (1-5)
-
-        Returns:
-            np.ndarray: Indices for the current split (train or validation)
-        """
-
-        # Get the list of validation videos for this fold
-        # Note: You'll need to define your cross-validation splits since Disentangle is not used
-        # For now, this is a placeholder - you'll need to implement your own cross-val logic
-        val_videos = []  # Define your validation videos for this fold
-
-        # Find all unique video IDs in the dataset
-        all_video_ids = set(self.annotations["video_id"].unique())
-
-        # For training, use all videos that are not in the validation set
-        train_videos = [v for v in all_video_ids if v not in val_videos]
-
-        # Get indices for the selected split
-        if self.split == "train":
-            indices = self.annotations[
-                self.annotations["video_id"].isin(train_videos)
-            ].index.values
-        else:
-            indices = self.annotations[
-                self.annotations["video_id"].isin(val_videos)
-            ].index.values
-
-        return indices
 
     def _create_stratified_split(self, train_ratio: float) -> np.ndarray:
         """
         Create a stratified split ensuring each triplet combination appears in both train and val sets.
-
-        Args:
-            train_ratio: Fraction of data to use for training
-
-        Returns:
-            np.ndarray: Indices for the current split (train or validation)
+        For triplets that appear only once, include them in BOTH train and val sets.
         """
         # Create a mapping of triplet combinations to video indices
         triplet_to_indices = defaultdict(list)
 
         for idx, row in self.annotations.iterrows():
-            # Convert string representation to actual list
             triplet_combo = tuple(sorted(ast.literal_eval(row["action_label"])))
             triplet_to_indices[triplet_combo].append(idx)
 
         train_indices = []
         val_indices = []
+        both_sets_indices = []  # For single-occurrence triplets
 
         # For each triplet combination
         for triplet_combo, indices in triplet_to_indices.items():
             combo_indices = np.array(indices)
-            np.random.shuffle(combo_indices)
 
-            # Skip triplets that appear only once
-            if len(combo_indices) == 1:
-                continue
+            if len(indices) == 1:
+                # Single occurrence: add to both train and val
+                both_sets_indices.extend(combo_indices)
             else:
+                # Multiple occurrences: use stratified split
+                np.random.shuffle(combo_indices)
+
                 # Calculate training size, ensuring at least one sample remains for validation
                 combo_train_size = min(
                     max(1, int(len(combo_indices) * train_ratio)),
-                    len(combo_indices) - 1,  # Ensure at least one sample for validation
+                    len(combo_indices) - 1,
                 )
 
                 train_indices.extend(combo_indices[:combo_train_size])
                 val_indices.extend(combo_indices[combo_train_size:])
+
+        # Add single-occurrence triplets to both sets
+        train_indices.extend(both_sets_indices)
+        val_indices.extend(both_sets_indices)
 
         # Convert to numpy arrays and shuffle
         train_indices = np.array(train_indices)
@@ -325,7 +219,6 @@ class MultiTaskVideoDataset(Dataset):
         np.random.shuffle(train_indices)
         np.random.shuffle(val_indices)
 
-        # Return appropriate indices based on split
         if self.split == "train":
             return train_indices
         else:
@@ -337,29 +230,29 @@ class MultiTaskVideoDataset(Dataset):
         triplet_counts = defaultdict(int)
         # Count current triplet occurrences
         for _, row in self.annotations.iterrows():
-            for triplet in ast.literal_eval(row["action_label"]):
-                triplet_counts[triplet] += 1
+            for action in ast.literal_eval(row["action_label"]):
+                triplet_counts[action] += 1
 
         # Identify triplets needing more samples
         needed_triplets = {
-            triplet: max(min_occurrences - count, 0)
-            for triplet, count in triplet_counts.items()
+            action: max(min_occurrences - count, 0)
+            for action, count in triplet_counts.items()
         }
 
         # Collect indices of clips containing each triplet
         triplet_clips = defaultdict(list)
         for idx, row in self.annotations.iterrows():
-            for triplet in ast.literal_eval(row["action_label"]):
-                if needed_triplets.get(triplet, 0) > 0:
-                    triplet_clips[triplet].append(idx)
+            for action in ast.literal_eval(row["action_label"]):
+                if needed_triplets.get(action, 0) > 0:
+                    triplet_clips[action].append(idx)
 
         # Oversample clips
         new_samples = []
-        for triplet, needed in needed_triplets.items():
-            if needed == 0 or triplet not in triplet_clips:
+        for action, needed in needed_triplets.items():
+            if needed == 0 or action not in triplet_clips:
                 continue
 
-            clips = triplet_clips[triplet]
+            clips = triplet_clips[action]
 
             # Add extra samples
             new_samples.extend(random.choices(clips, k=needed))
@@ -376,28 +269,13 @@ class MultiTaskVideoDataset(Dataset):
 
         Args:
             label_ids: List of label IDs that are active
-            category: Category name ('instrument', 'verb', 'target')
+            category: Category name ('instrument', 'verb', 'target', 'triplet')
 
         Returns:
             Multi-hot encoded tensor
         """
         multi_hot = torch.zeros(self.num_classes[category])
-
-        if category == "triplet":
-            # Map discontinuous triplet IDs to continuous indices
-            continuous_indices = []
-            for lid in label_ids:
-                if lid in self.triplet_to_index:
-                    continuous_indices.append(self.triplet_to_index[lid])
-                else:
-                    print(
-                        f"Warning: Triplet ID {lid} not found in mapping, skipping..."
-                    )
-            if continuous_indices:
-                multi_hot[continuous_indices] = 1
-        else:
-            multi_hot[label_ids] = 1
-
+        multi_hot[label_ids] = 1  # NO MAPPING NEEDED - USE IDS DIRECTLY
         return multi_hot
 
     def __len__(self) -> int:
@@ -409,8 +287,16 @@ class MultiTaskVideoDataset(Dataset):
 
         # Load video
         video_path = f"{self.clips_dir}/{row['file_name']}"
-        original_video = VideoReader(video_path, ctx=cpu(0))
-        total_frames = len(original_video)
+        try:
+            original_video = VideoReader(video_path, ctx=cpu(0))
+            total_frames = len(original_video)
+        except RuntimeError as e:
+            print(f"Warning: Skipping corrupted video {video_path}: {e}")
+            # Return a random other sample instead
+            new_idx = random.randint(0, len(self.annotations) - 1)
+            while new_idx == idx:  # Make sure we don't get the same corrupted file
+                new_idx = random.randint(0, len(self.annotations) - 1)
+            return self.__getitem__(new_idx)
 
         if self.train:
             # Calculate the ranges for start and end indices
