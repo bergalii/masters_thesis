@@ -187,37 +187,25 @@ class MultiTaskVideoDataset(Dataset):
 
         train_indices = []
         val_indices = []
-        both_sets_indices = []  # For single-occurrence triplets
 
         # For each triplet combination
         for triplet_combo, indices in triplet_to_indices.items():
             combo_indices = np.array(indices)
+            # Multiple occurrences: use stratified split
+            np.random.shuffle(combo_indices)
 
-            if len(indices) == 1:
-                # Single occurrence: add to both train and val
-                both_sets_indices.extend(combo_indices)
-            else:
-                # Multiple occurrences: use stratified split
-                np.random.shuffle(combo_indices)
+            # Calculate training size, ensuring at least one sample remains for validation
+            combo_train_size = min(
+                max(1, int(len(combo_indices) * train_ratio)),
+                len(combo_indices) - 1,
+            )
 
-                # Calculate training size, ensuring at least one sample remains for validation
-                combo_train_size = min(
-                    max(1, int(len(combo_indices) * train_ratio)),
-                    len(combo_indices) - 1,
-                )
-
-                train_indices.extend(combo_indices[:combo_train_size])
-                val_indices.extend(combo_indices[combo_train_size:])
-
-        # Add single-occurrence triplets to both sets
-        train_indices.extend(both_sets_indices)
-        val_indices.extend(both_sets_indices)
+            train_indices.extend(combo_indices[:combo_train_size])
+            val_indices.extend(combo_indices[combo_train_size:])
 
         # Convert to numpy arrays and shuffle
         train_indices = np.array(train_indices)
         val_indices = np.array(val_indices)
-        np.random.shuffle(train_indices)
-        np.random.shuffle(val_indices)
 
         if self.split == "train":
             return train_indices
@@ -287,16 +275,9 @@ class MultiTaskVideoDataset(Dataset):
 
         # Load video
         video_path = f"{self.clips_dir}/{row['file_name']}"
-        try:
-            original_video = VideoReader(video_path, ctx=cpu(0))
-            total_frames = len(original_video)
-        except RuntimeError as e:
-            print(f"Warning: Skipping corrupted video {video_path}: {e}")
-            # Return a random other sample instead
-            new_idx = random.randint(0, len(self.annotations) - 1)
-            while new_idx == idx:  # Make sure we don't get the same corrupted file
-                new_idx = random.randint(0, len(self.annotations) - 1)
-            return self.__getitem__(new_idx)
+
+        original_video = VideoReader(video_path, ctx=cpu(0))
+        total_frames = len(original_video)
 
         if self.train:
             # Calculate the ranges for start and end indices

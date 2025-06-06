@@ -546,8 +546,7 @@ class MultiTaskSelfDistillationTrainer:
             predictions = all_predictions[task]
             labels = all_labels[task]
 
-            # Use Average Precision (AP) as primary metric for consistency with original code
-            # This is more robust than F1 with optimized thresholds
+            # Use Average Precision (AP) as primary metric
             class_aps = []
             class_precisions = []
             class_recalls = []
@@ -562,7 +561,7 @@ class MultiTaskSelfDistillationTrainer:
                     continue
 
                 # Calculate Average Precision (equivalent to mAP per class)
-                ap = average_precision_score(class_labels, class_preds)
+                ap = average_precision_score(class_labels, class_preds, "macro")
                 class_aps.append(ap)
 
                 # Calculate metrics with fixed threshold (0.5) for consistency
