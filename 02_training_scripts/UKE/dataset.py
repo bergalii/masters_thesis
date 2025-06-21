@@ -10,6 +10,7 @@ import albumentations as A
 from torchvision.transforms import Compose, ToTensor, Normalize
 from collections import defaultdict
 import random
+import os
 
 
 class MultiTaskVideoDataset(Dataset):
@@ -41,7 +42,8 @@ class MultiTaskVideoDataset(Dataset):
         # First initialize global mappings before splitting the dataset
         self._initialize_global_mappings()
 
-        split_indices = self._create_stratified_split(train_ratio)
+        # split_indices = self._create_stratified_split(train_ratio)
+        split_indices = self._create_video_based_split(train_ratio)
         self.annotations = self.annotations.iloc[split_indices].reset_index(drop=True)
 
         # Balance the training set based on minimum occurences for each triplet
@@ -52,7 +54,7 @@ class MultiTaskVideoDataset(Dataset):
         self.preprocess = Compose(
             [
                 ToTensor(),
-                Normalize(mean=[0.3656, 0.3660, 0.3670], std=[0.2025, 0.2021, 0.2027]),
+                Normalize(mean=[0.3729, 0.2067, 0.2102], std=[0.3171, 0.2348, 0.2401]),
             ]
         )
 
@@ -175,8 +177,7 @@ class MultiTaskVideoDataset(Dataset):
 
     def _create_stratified_split(self, train_ratio: float) -> np.ndarray:
         """
-        Create a stratified split ensuring each triplet combination appears in both train and val sets.
-        For triplets that appear only once, include them in BOTH train and val sets.
+        Create a stratified split ensuring proper 80-20 distribution for each triplet combination.
         """
         # Create a mapping of triplet combinations to video indices
         triplet_to_indices = defaultdict(list)
@@ -191,21 +192,71 @@ class MultiTaskVideoDataset(Dataset):
         # For each triplet combination
         for triplet_combo, indices in triplet_to_indices.items():
             combo_indices = np.array(indices)
-            # Multiple occurrences: use stratified split
             np.random.shuffle(combo_indices)
 
-            # Calculate training size, ensuring at least one sample remains for validation
-            combo_train_size = min(
-                max(1, int(len(combo_indices) * train_ratio)),
-                len(combo_indices) - 1,
-            )
+            n_samples = len(combo_indices)
 
-            train_indices.extend(combo_indices[:combo_train_size])
-            val_indices.extend(combo_indices[combo_train_size:])
+            if n_samples == 1:
+                # Single sample: put ONLY in validation
+                # val_indices.extend(combo_indices)
+                continue
+            else:
+                # Multiple samples: use exact 80-20 split
+                # Always ensure at least 1 sample in validation
+                n_train = int(np.ceil(n_samples * train_ratio))
+                # Ensure we leave at least 1 for validation
+                n_train = min(n_train, n_samples - 1)
+
+                train_indices.extend(combo_indices[:n_train])
+                val_indices.extend(combo_indices[n_train:])
 
         # Convert to numpy arrays and shuffle
         train_indices = np.array(train_indices)
         val_indices = np.array(val_indices)
+
+        train_set = set(train_indices)
+        val_set = set(val_indices)
+        overlap = train_set.intersection(val_set)
+        if overlap:
+            print(f"Data leakage detected! {len(overlap)} samples in both sets")
+
+        np.random.shuffle(train_indices)
+        np.random.shuffle(val_indices)
+
+        if self.split == "train":
+            return train_indices
+        else:
+            return val_indices
+
+    def _create_video_based_split(self, train_ratio: float) -> np.ndarray:
+        """
+        Create a video-based split where video02 is used for training and video01 for validation.
+        The train_ratio parameter is ignored in this implementation.
+        """
+        train_indices = []
+        val_indices = []
+
+        for idx, row in self.annotations.iterrows():
+            video_id = row["video_id"]
+
+            # Check if this sample contains the rare "Clip" target
+            action_labels = ast.literal_eval(row["action_label"])
+            has_clip_target = 64 in action_labels  # Triplet 64 is the Clip one
+
+            if has_clip_target:
+                # Force all Clip samples into training set
+                train_indices.append(idx)
+            elif video_id == 2:  # Normal video02 for training
+                train_indices.append(idx)
+            elif video_id == 1:  # Normal video01 for validation
+                val_indices.append(idx)
+
+        # Convert to numpy arrays and shuffle
+        train_indices = np.array(train_indices)
+        val_indices = np.array(val_indices)
+
+        np.random.shuffle(train_indices)
+        np.random.shuffle(val_indices)
 
         if self.split == "train":
             return train_indices
@@ -251,20 +302,122 @@ class MultiTaskVideoDataset(Dataset):
             self.annotations = pd.concat([self.annotations, new_df], ignore_index=True)
             self.annotations = self.annotations.sample(frac=1).reset_index(drop=True)
 
+    # def _create_multi_hot(self, label_ids: List[int], category: str) -> torch.Tensor:
+    #     """
+    #     Create a multi-hot encoded tensor for a specific category.
+
+    #     Args:
+    #         label_ids: List of label IDs that are active
+    #         category: Category name ('instrument', 'verb', 'target', 'triplet')
+
+    #     Returns:
+    #         Multi-hot encoded tensor
+    #     """
+    #     multi_hot = torch.zeros(self.num_classes[category])
+    #     multi_hot[label_ids] = 1
+    #     return multi_hot
+
     def _create_multi_hot(self, label_ids: List[int], category: str) -> torch.Tensor:
-        """
-        Create a multi-hot encoded tensor for a specific category.
+        if category == "triplet":
+            # Quick hardcoded mapping for testing
+            # ACTIVE_TRIPLETS = [
+            #     2,
+            #     3,
+            #     5,
+            #     7,
+            #     8,
+            #     9,
+            #     11,
+            #     12,
+            #     13,
+            #     14,
+            #     15,
+            #     16,
+            #     18,
+            #     19,
+            #     20,
+            #     22,
+            #     23,
+            #     24,
+            #     26,
+            #     27,
+            #     28,
+            #     29,
+            #     31,
+            #     32,
+            #     35,
+            #     39,
+            #     40,
+            #     41,
+            #     42,
+            #     43,
+            #     44,
+            #     45,
+            #     46,
+            #     47,
+            #     48,
+            #     49,
+            #     50,
+            #     51,
+            #     54,
+            #     55,
+            #     56,
+            #     57,
+            #     59,
+            #     60,
+            #     61,
+            #     62,
+            #     63,
+            #     65,
+            #     66,
+            # ]
 
-        Args:
-            label_ids: List of label IDs that are active
-            category: Category name ('instrument', 'verb', 'target', 'triplet')
+            ACTIVE_TRIPLETS = [
+                2,
+                5,
+                7,
+                10,
+                11,
+                13,
+                14,
+                15,
+                16,
+                20,
+                22,
+                23,
+                31,
+                32,
+                35,
+                38,
+                39,
+                40,
+                42,
+                43,
+                44,
+                45,
+                46,
+                47,
+                48,
+                51,
+                52,
+                54,
+                57,
+                61,
+                63,
+                65,
+            ]
 
-        Returns:
-            Multi-hot encoded tensor
-        """
-        multi_hot = torch.zeros(self.num_classes[category])
-        multi_hot[label_ids] = 1  # NO MAPPING NEEDED - USE IDS DIRECTLY
-        return multi_hot
+            multi_hot = torch.zeros(len(ACTIVE_TRIPLETS))
+            for label_id in label_ids:
+                if label_id in ACTIVE_TRIPLETS:
+                    compact_idx = ACTIVE_TRIPLETS.index(label_id)
+                    multi_hot[compact_idx] = 1
+            return multi_hot
+        else:
+            # Original logic for other categories
+            multi_hot = torch.zeros(self.num_classes[category])
+            multi_hot[label_ids] = 1
+            return multi_hot
 
     def __len__(self) -> int:
         return len(self.annotations)
@@ -478,41 +631,161 @@ class MultiTaskVideoDataset(Dataset):
 
         return frames_tensor, labels
 
+    def get_compact_triplet_to_ivt(self):
+        """Return a compact triplet_to_ivt mapping"""
+        # ACTIVE_TRIPLETS = [
+        #     2,
+        #     3,
+        #     5,
+        #     7,
+        #     8,
+        #     9,
+        #     11,
+        #     12,
+        #     13,
+        #     14,
+        #     15,
+        #     16,
+        #     18,
+        #     19,
+        #     20,
+        #     22,
+        #     23,
+        #     24,
+        #     26,
+        #     27,
+        #     28,
+        #     29,
+        #     31,
+        #     32,
+        #     35,
+        #     39,
+        #     40,
+        #     41,
+        #     42,
+        #     43,
+        #     44,
+        #     45,
+        #     46,
+        #     47,
+        #     48,
+        #     49,
+        #     50,
+        #     51,
+        #     54,
+        #     55,
+        #     56,
+        #     57,
+        #     59,
+        #     60,
+        #     61,
+        #     62,
+        #     63,
+        #     65,
+        #     66,
+        # ]
+
+        ACTIVE_TRIPLETS = [
+            2,
+            5,
+            7,
+            10,
+            11,
+            13,
+            14,
+            15,
+            16,
+            20,
+            22,
+            23,
+            31,
+            32,
+            35,
+            38,
+            39,
+            40,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            51,
+            52,
+            54,
+            57,
+            61,
+            63,
+            65,
+        ]
+
+        compact_mapping = {}
+        for compact_idx, original_triplet_id in enumerate(ACTIVE_TRIPLETS):
+            if original_triplet_id in self.triplet_to_ivt:
+                compact_mapping[compact_idx] = self.triplet_to_ivt[original_triplet_id]
+
+        return compact_mapping
+
     @staticmethod
     def calculate_video_mean_std(
-        loader,
+        clips_dir: str,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """
-        Calculate mean and standard deviation across all frames in the video dataset.
+        Calculate mean and std across all frames in all videos.
 
         Args:
-            dataset: MultiTaskVideoDataset instance
-            batch_size: Number of videos to process in each batch
-            num_workers: Number of worker processes for data loading
+            clips_dir: Directory containing mp4 files
 
         Returns:
-            tuple: (mean, std) tensors of shape (3,) for RGB channels
+            tuple: (mean, std) tensors of shape (3,)
         """
 
-        # Initialize accumulators for each channel
-        channels_sum = torch.zeros(3)
-        channels_squared_sum = torch.zeros(3)
-        num_frames = 0
+        # Get all mp4 files
+        video_files = [f for f in os.listdir(clips_dir) if f.endswith(".mp4")]
 
-        # Process each batch
-        for frames, _ in loader:
-            b, c, t, h, w = frames.shape
-            frames = frames.permute(0, 2, 1, 3, 4).reshape(-1, c, h, w)
+        # Initialize accumulators
+        pixel_sum = torch.zeros(3, dtype=torch.float64)
+        pixel_sq_sum = torch.zeros(3, dtype=torch.float64)
+        num_pixels = 0
 
-            # Calculate mean and squared mean for the batch
-            batch_samples = frames.size(0)
-            channels_sum += frames.mean(dim=(0, 2, 3)) * batch_samples
-            channels_squared_sum += (frames**2).mean(dim=(0, 2, 3)) * batch_samples
-            num_frames += batch_samples
+        print(f"Processing {len(video_files)} videos...")
+
+        for i, video_file in enumerate(video_files):
+            video_path = os.path.join(clips_dir, video_file)
+            print(f"Processing {i+1}/{len(video_files)}: {video_file}")
+
+            try:
+                video = VideoReader(video_path, ctx=cpu(0))
+
+                # Process all frames
+                for frame_idx in range(len(video)):
+                    frame = video[frame_idx].asnumpy()
+
+                    # Convert to tensor and normalize to [0, 1]
+                    frame_tensor = torch.from_numpy(frame).float() / 255.0
+                    frame_tensor = frame_tensor.permute(2, 0, 1)  # HWC -> CHW
+
+                    # Accumulate statistics
+                    pixel_sum += frame_tensor.sum(dim=[1, 2]).double()
+                    pixel_sq_sum += (frame_tensor**2).sum(dim=[1, 2]).double()
+                    num_pixels += frame_tensor.shape[1] * frame_tensor.shape[2]
+
+            except Exception as e:
+                print(f"Error processing {video_file}: {e}")
+                continue
 
         # Calculate final statistics
-        mean = channels_sum / num_frames
-        std = torch.sqrt(channels_squared_sum / num_frames - mean**2)
+        mean = pixel_sum / num_pixels
+        variance = (pixel_sq_sum / num_pixels) - (mean**2)
+        std = torch.sqrt(variance)
 
-        print(f"Dataset mean: [{mean[0]:.4f}, {mean[1]:.4f}, {mean[2]:.4f}]")
-        print(f"Dataset std: [{std[0]:.4f}, {std[1]:.4f}, {std[2]:.4f}]")
+        # Convert to float32
+        mean = mean.float()
+        std = std.float()
+
+        print(f"\nProcessed {num_pixels:,} total pixels")
+        print(f"Mean: [{mean[0]:.4f}, {mean[1]:.4f}, {mean[2]:.4f}]")
+        print(f"Std:  [{std[0]:.4f}, {std[1]:.4f}, {std[2]:.4f}]")
+
+        return mean, std

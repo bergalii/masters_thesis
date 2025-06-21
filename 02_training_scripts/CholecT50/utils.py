@@ -56,12 +56,7 @@ def get_label_counts(dataset, category) -> Dict:
     counts = {label_id: 0 for label_id in dataset.label_mappings[category].keys()}
     for idx in range(len(dataset.annotations)):
         row = dataset.annotations.iloc[idx]
-        # labels = ast.literal_eval(str(row[f"{category}_label"]))
-        if category == "triplet":
-            column_name = "action_label"
-        else:
-            column_name = f"{category}_label"
-        labels = ast.literal_eval(str(row[column_name]))
+        labels = ast.literal_eval(str(row[f"{category}_label"]))
         for label in labels:
             counts[label] = counts.get(label, 0) + 1
     return counts

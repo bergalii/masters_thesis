@@ -191,6 +191,202 @@ class AttentionModule(nn.Module):
         return self.fusion(combined)
 
 
+class AttentionModuleSequence(nn.Module):
+    def __init__(
+        self,
+        feature_dims,
+        hidden_dim,
+        common_dim,
+        num_heads=4,
+        dropout=0.3,
+    ):
+        super().__init__()
+        self.common_dim = common_dim
+
+        # Project hidden features
+        self.hidden_projection = nn.ModuleDict(
+            {
+                task: nn.Sequential(
+                    nn.Linear(hidden_dim, common_dim),
+                    nn.LayerNorm(common_dim),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                )
+                for task in feature_dims
+            }
+        )
+
+        # Project logits
+        self.logit_projection = nn.ModuleDict(
+            {
+                task: nn.Sequential(
+                    nn.Linear(feature_dims[task], common_dim // 2),
+                    nn.LayerNorm(common_dim // 2),
+                    nn.GELU(),
+                    nn.Dropout(dropout),
+                )
+                for task in feature_dims
+            }
+        )
+
+        # Cross-attention layers
+        self.cross_attention_layers = nn.ModuleDict(
+            {
+                "verb_inst": nn.MultiheadAttention(
+                    common_dim, num_heads, dropout=dropout, batch_first=True
+                ),
+                "verb_target": nn.MultiheadAttention(
+                    common_dim, num_heads, dropout=dropout, batch_first=True
+                ),
+                "inst_target": nn.MultiheadAttention(
+                    common_dim, num_heads, dropout=dropout, batch_first=True
+                ),
+            }
+        )
+
+        # Self-attention for each task
+        self.self_attention = nn.MultiheadAttention(
+            common_dim, num_heads, dropout=dropout, batch_first=True
+        )
+
+        # Layer norms for residual connections
+        self.norm1 = nn.ModuleDict(
+            {task: nn.LayerNorm(common_dim) for task in feature_dims}
+        )
+
+        self.norm2 = nn.ModuleDict(
+            {task: nn.LayerNorm(common_dim) for task in feature_dims}
+        )
+
+        # Gating mechanism to control information flow
+        self.gate = nn.ModuleDict(
+            {
+                task: nn.Sequential(nn.Linear(common_dim * 2, common_dim), nn.Sigmoid())
+                for task in feature_dims
+            }
+        )
+
+        # Final fusion layer with residual connection
+        self.fusion = nn.Sequential(
+            nn.Linear(3 * common_dim + 3 * (common_dim // 2), common_dim),
+            nn.LayerNorm(common_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(common_dim, common_dim),
+            nn.LayerNorm(common_dim),
+        )
+
+    def forward(
+        self,
+        verb_hidden,
+        verb_logits,
+        inst_hidden,
+        inst_logits,
+        target_hidden,
+        target_logits,
+    ):
+        # Inputs are now [batch, 3, hidden_dim] for hidden and [batch, 3, num_classes] for logits
+        B, S, H = verb_hidden.shape  # S = 3 (sequence length)
+
+        # Process hidden features - flatten batch and sequence to apply projections
+        verb_h = self.hidden_projection["verb"](verb_hidden.reshape(B * S, H)).reshape(
+            B, S, self.common_dim
+        )
+        inst_h = self.hidden_projection["instrument"](
+            inst_hidden.reshape(B * S, -1)
+        ).reshape(B, S, self.common_dim)
+        target_h = self.hidden_projection["target"](
+            target_hidden.reshape(B * S, -1)
+        ).reshape(B, S, self.common_dim)
+
+        # Process logits
+        verb_l = self.logit_projection["verb"](
+            torch.sigmoid(verb_logits).reshape(B * S, -1)
+        ).reshape(B, S, self.common_dim // 2)
+        inst_l = self.logit_projection["instrument"](
+            torch.sigmoid(inst_logits).reshape(B * S, -1)
+        ).reshape(B, S, self.common_dim // 2)
+        target_l = self.logit_projection["target"](
+            torch.sigmoid(target_logits).reshape(B * S, -1)
+        ).reshape(B, S, self.common_dim // 2)
+
+        verb_emb = verb_h  # [B, 3, common_dim]
+        inst_emb = inst_h
+        target_emb = target_h
+
+        # Self-attention
+        verb_sa, _ = self.self_attention(verb_emb, verb_emb, verb_emb)
+        inst_sa, _ = self.self_attention(inst_emb, inst_emb, inst_emb)
+        target_sa, _ = self.self_attention(target_emb, target_emb, target_emb)
+
+        # Apply layer norm with residual
+        verb_emb = self.norm1["verb"](verb_emb + verb_sa)
+        inst_emb = self.norm1["instrument"](inst_emb + inst_sa)
+        target_emb = self.norm1["target"](target_emb + target_sa)
+
+        # Cross-attention
+        v2i, _ = self.cross_attention_layers["verb_inst"](verb_emb, inst_emb, inst_emb)
+        i2v, _ = self.cross_attention_layers["verb_inst"](inst_emb, verb_emb, verb_emb)
+        v2t, _ = self.cross_attention_layers["verb_target"](
+            verb_emb, target_emb, target_emb
+        )
+        t2v, _ = self.cross_attention_layers["verb_target"](
+            target_emb, verb_emb, verb_emb
+        )
+        i2t, _ = self.cross_attention_layers["inst_target"](
+            inst_emb, target_emb, target_emb
+        )
+        t2i, _ = self.cross_attention_layers["inst_target"](
+            target_emb, inst_emb, inst_emb
+        )
+
+        # Gating - flatten to apply gate
+        v_gate = self.gate["verb"](
+            torch.cat(
+                [verb_emb.reshape(B * S, -1), ((v2i + v2t) / 2).reshape(B * S, -1)],
+                dim=1,
+            )
+        ).reshape(B, S, -1)
+        i_gate = self.gate["instrument"](
+            torch.cat(
+                [inst_emb.reshape(B * S, -1), ((i2v + i2t) / 2).reshape(B * S, -1)],
+                dim=1,
+            )
+        ).reshape(B, S, -1)
+        t_gate = self.gate["target"](
+            torch.cat(
+                [target_emb.reshape(B * S, -1), ((t2v + t2i) / 2).reshape(B * S, -1)],
+                dim=1,
+            )
+        ).reshape(B, S, -1)
+
+        # Apply gating - NO UNSQUEEZE needed
+        verb_fused = verb_emb + v_gate * (v2i + v2t) / 2
+        inst_fused = inst_emb + i_gate * (i2v + i2t) / 2
+        target_fused = target_emb + t_gate * (t2v + t2i) / 2
+
+        # Apply second layer norm
+        verb_final = self.norm2["verb"](verb_fused)
+        inst_final = self.norm2["instrument"](inst_fused)
+        target_final = self.norm2["target"](target_fused)
+
+        # AVERAGE POOL over sequence dimension before concatenating
+        verb_final = verb_final.mean(dim=1)  # [B, common_dim]
+        inst_final = inst_final.mean(dim=1)
+        target_final = target_final.mean(dim=1)
+        verb_l = verb_l.mean(dim=1)  # [B, common_dim//2]
+        inst_l = inst_l.mean(dim=1)
+        target_l = target_l.mean(dim=1)
+
+        # Concatenate - NO SQUEEZE needed
+        combined = torch.cat(
+            [verb_final, inst_final, target_final, verb_l, inst_l, target_l], dim=1
+        )
+
+        # Final fusion
+        return self.fusion(combined)
+
+
 class MultiTaskHead(nn.Module):
     def __init__(self, in_features: int, num_classes: int, hidden_layer_dim: int):
         super().__init__()

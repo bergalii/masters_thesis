@@ -159,7 +159,7 @@ def calculate_triplet_ratios(data):
 
 def create_averaged_pie_charts(avg_instruments, avg_verbs, avg_targets):
     """Create three large pie charts showing average distributions."""
-    fig, axes = plt.subplots(1, 3, figsize=(24, 8))
+    fig, axes = plt.subplots(1, 3, figsize=(30, 10))
 
     # Instruments pie chart
     labels = list(avg_instruments.keys())
@@ -167,9 +167,9 @@ def create_averaged_pie_charts(avg_instruments, avg_verbs, avg_targets):
     axes[0].pie(
         sizes,
         labels=labels,
-        autopct=lambda pct: f"{pct:.1f}%" if pct >= 2 else "",
+        autopct=lambda pct: f"{pct:.1f}%" if pct >= 3 else "",
         startangle=90,
-        textprops={"fontsize": 12},
+        textprops={"fontsize": 13},
     )
 
     # Verbs pie chart
@@ -178,9 +178,9 @@ def create_averaged_pie_charts(avg_instruments, avg_verbs, avg_targets):
     axes[1].pie(
         sizes,
         labels=labels,
-        autopct=lambda pct: f"{pct:.1f}%" if pct >= 2 else "",
+        autopct=lambda pct: f"{pct:.1f}%" if pct >= 3 else "",
         startangle=90,
-        textprops={"fontsize": 12},
+        textprops={"fontsize": 14},
     )
 
     # Targets pie chart
@@ -189,9 +189,9 @@ def create_averaged_pie_charts(avg_instruments, avg_verbs, avg_targets):
     axes[2].pie(
         sizes,
         labels=labels,
-        autopct=lambda pct: f"{pct:.1f}%" if pct >= 2 else "",
+        autopct=lambda pct: f"{pct:.1f}%" if pct >= 3 else "",
         startangle=90,
-        textprops={"fontsize": 12},
+        textprops={"fontsize": 14},
     )
 
     plt.tight_layout()

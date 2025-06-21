@@ -16,5 +16,5 @@ consistency_loss_weight: 0.0
 temperature: 3.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 
-guidance_scale: 1.0 # changable during inference
+guidance_scale: 0.0 # changable during inference
 fpn_out_channels: 256 # used for FPN module - object detection only -

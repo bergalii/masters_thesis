@@ -4,15 +4,9 @@ import torch.nn.functional as F
 import torch.nn as nn
 import logging
 from torchvision.models.video.swin_transformer import swin3d_s, Swin3D_S_Weights
-import numpy as np
-from sklearn.metrics import (
-    precision_score,
-    recall_score,
-    f1_score,
-    average_precision_score,
-)
+from recognition import Recognition
 import copy
-from modules import AttentionModule, MultiTaskHead
+from modules import AttentionModuleSequence, MultiTaskHead
 import math
 
 
@@ -70,7 +64,6 @@ class MultiTaskSelfDistillationTrainer:
             [triplet_to_ivt[idx] for idx in range(len(triplet_to_ivt))],
             device=device,
         )
-
         self.feature_dims = {k: v for k, v in num_classes.items() if k != "triplet"}
         self._configure_models()
 
@@ -110,7 +103,7 @@ class MultiTaskSelfDistillationTrainer:
             in_features, self.num_classes["target"], self.hidden_layer_dim
         ).to(self.device)
 
-        self.teacher_model.attention_module = AttentionModule(
+        self.teacher_model.attention_module = AttentionModuleSequence(
             self.feature_dims,
             self.hidden_layer_dim,
             self.attention_module_common_dim,
@@ -215,30 +208,72 @@ class MultiTaskSelfDistillationTrainer:
 
     def _forward_pass(self, model, inputs):
         """Perform forward pass through the model based on the model type [teacher, student]"""
-        backbone_features = model(inputs)
+        # Process full sequence
+        full_features = model(inputs)  # [batch, features]
 
-        # Get individual component predictions
-        verb_logits, verb_hidden = model.verb_head(backbone_features)
-        instrument_logits, inst_hidden = model.instrument_head(backbone_features)
-        target_logits, target_hidden = model.target_head(backbone_features)
+        # Process first half (frames 0-7)
+        first_half = inputs[:, :, :8, :, :]
+        first_features = model(first_half)  # [batch, features]
 
-        attention_output = model.attention_module(
-            verb_hidden,
-            verb_logits,
-            inst_hidden,
-            instrument_logits,
-            target_hidden,
-            target_logits,
+        # Process second half (frames 8-15)
+        second_half = inputs[:, :, 8:, :, :]
+        second_features = model(second_half)  # [batch, features]
+
+        # Get predictions for each temporal segment
+        # Full sequence
+        verb_logits_full, verb_hidden_full = self.verb_head(full_features)
+        inst_logits_full, inst_hidden_full = self.instrument_head(full_features)
+        target_logits_full, target_hidden_full = self.target_head(full_features)
+
+        # First half
+        verb_logits_first, verb_hidden_first = self.verb_head(first_features)
+        inst_logits_first, inst_hidden_first = self.instrument_head(first_features)
+        target_logits_first, target_hidden_first = self.target_head(first_features)
+
+        # Second half
+        verb_logits_second, verb_hidden_second = self.verb_head(second_features)
+        inst_logits_second, inst_hidden_second = self.instrument_head(second_features)
+        target_logits_second, target_hidden_second = self.target_head(second_features)
+
+        # Stack to create sequences
+        verb_hidden_seq = torch.stack(
+            [verb_hidden_first, verb_hidden_full, verb_hidden_second], dim=1
+        )  # [batch, 3, hidden_dim]
+        verb_logits_seq = torch.stack(
+            [verb_logits_first, verb_logits_full, verb_logits_second], dim=1
+        )  # [batch, 3, num_classes]
+
+        inst_hidden_seq = torch.stack(
+            [inst_hidden_first, inst_hidden_full, inst_hidden_second], dim=1
+        )
+        inst_logits_seq = torch.stack(
+            [inst_logits_first, inst_logits_full, inst_logits_second], dim=1
         )
 
+        target_hidden_seq = torch.stack(
+            [target_hidden_first, target_hidden_full, target_hidden_second], dim=1
+        )
+        target_logits_seq = torch.stack(
+            [target_logits_first, target_logits_full, target_logits_second], dim=1
+        )
+
+        # Pass sequences to attention module
+        attention_output = self.attention_module(
+            verb_hidden_seq,
+            verb_logits_seq,
+            inst_hidden_seq,
+            inst_logits_seq,
+            target_hidden_seq,
+            target_logits_seq,
+        )
         # Combine all features for triplet prediction
         combined_features = torch.cat(
             [
-                backbone_features,  # original features from backbone
+                full_features,  # original features from backbone
                 attention_output,  # attention-fused features
-                torch.sigmoid(verb_logits),  # Probability predictions
-                torch.sigmoid(instrument_logits),
-                torch.sigmoid(target_logits),
+                torch.sigmoid(verb_logits_full),  # Probability predictions
+                torch.sigmoid(inst_logits_full),
+                torch.sigmoid(target_logits_full),
             ],
             dim=1,
         )
@@ -246,9 +281,9 @@ class MultiTaskSelfDistillationTrainer:
         triplet_logits, _ = model.triplet_head(combined_features)
 
         return {
-            "verb": verb_logits,
-            "instrument": instrument_logits,
-            "target": target_logits,
+            "verb": verb_logits_full,
+            "instrument": inst_logits_full,
+            "target": target_logits_full,
             "triplet": triplet_logits,
         }
 
@@ -448,16 +483,75 @@ class MultiTaskSelfDistillationTrainer:
                 self.logger.info(f"New best triplet mAP: {triplet_map:.4f}")
                 self.logger.info("-" * 50)
 
+    def _train_model_components(self, model, optimizer):
+        """Train only component tasks (verb, instrument, target)"""
+
+        # Fixed rates for component training)
+        for i, param_group in enumerate(optimizer.param_groups):
+            if i < 2:  # Backbone parameter groups (first two groups)
+                param_group["lr"] = self.learning_rate / 10
+            else:  # Head parameter groups (last two groups)
+                param_group["lr"] = self.learning_rate
+
+        for epoch in range(int(self.num_epochs * 0.3)):
+            model.train()
+            epoch_losses = {}
+
+            for inputs, labels in self.train_loader:
+                inputs = inputs.to(self.device)
+                batch_labels = {
+                    task: labels[task].to(self.device)
+                    for task in ["verb", "instrument", "target"]
+                }
+
+                # Forward pass without triplet head
+                backbone_features = model(inputs)
+                verb_logits, _ = model.verb_head(backbone_features)
+                instrument_logits, _ = model.instrument_head(backbone_features)
+                target_logits, _ = model.target_head(backbone_features)
+
+                outputs = {
+                    "verb": verb_logits,
+                    "instrument": instrument_logits,
+                    "target": target_logits,
+                }
+
+                # Skip triplet loss
+                total_loss = 0
+                task_losses = {}
+
+                for task in outputs:
+                    task_loss = F.binary_cross_entropy_with_logits(
+                        outputs[task], batch_labels[task]
+                    )
+                    total_loss += self.task_weights[task] * task_loss
+                    task_losses[task] = task_loss.item()
+
+                optimizer.zero_grad()
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm=self.gradient_clipping
+                )
+                optimizer.step()
+
+                # Accumulate losses
+                for task, loss in task_losses.items():
+                    epoch_losses[task] = epoch_losses.get(task, 0) + loss
+
+            # Log metrics
+            self.logger.info(f"Phase 1 - Epoch {epoch+1}/{int(self.num_epochs * 0.3)}:")
+            for task in epoch_losses:
+                avg_loss = epoch_losses[task] / len(self.train_loader)
+                self.logger.info(f"{task.capitalize()} - Loss: {avg_loss:.4f}")
+
     def _validate_model(self, model):
-        """Validate model and compute metrics for all tasks using sklearn"""
+        """Validate model and compute metrics for all tasks"""
 
         model.eval()
 
-        # Initialize storage for predictions and labels
-        all_predictions = {
-            task: [] for task in ["verb", "instrument", "target", "triplet"]
-        }
-        all_labels = {task: [] for task in ["verb", "instrument", "target", "triplet"]}
+        recognize = Recognition(num_class=self.num_classes["triplet"])
+        # Reset for the current validation run
+        recognize.reset()
 
         with torch.no_grad():
             for inputs_batch, batch_labels in self.val_loader:
@@ -518,88 +612,58 @@ class MultiTaskSelfDistillationTrainer:
                         guidance * task_probabilities["triplet"]
                     )
 
-                    # Store predictions and labels for each task
-                    for task in ["verb", "instrument", "target"]:
-                        all_predictions[task].append(
-                            task_probabilities[task].cpu().numpy()
-                        )
-                        all_labels[task].append(
-                            batch_labels[task][b].unsqueeze(0).cpu().numpy()
-                        )
+                    # # Update with triplet predictions and the label for the video
+                    predictions = guided_triplet_probs.cpu().numpy()
+                    labels = batch_labels["triplet"][b].unsqueeze(0).cpu().numpy()
 
-                    # Use guided predictions for triplet
-                    all_predictions["triplet"].append(
-                        guided_triplet_probs.cpu().numpy()
-                    )
-                    all_labels["triplet"].append(
-                        batch_labels["triplet"][b].unsqueeze(0).cpu().numpy()
-                    )
+                    # Update the recognizer with the current video
+                    recognize.update(labels, predictions)
 
-        # Convert lists to numpy arrays
-        for task in ["verb", "instrument", "target", "triplet"]:
-            all_predictions[task] = np.vstack(all_predictions[task])
-            all_labels[task] = np.vstack(all_labels[task])
-
-        # Compute metrics
+        # Compute and log metrics
         task_metrics = {}
+        component_map = {
+            "triplet": "ivt",
+            "instrument": "i",
+            "verb": "v",
+            "target": "t",
+        }
 
-        for task in ["verb", "instrument", "target", "triplet"]:
-            predictions = all_predictions[task]
-            labels = all_labels[task]
+        for task, component in component_map.items():
+            # Calculate metrics for this component
+            results = recognize.compute_AP(component=component)
 
-            # Use Average Precision (AP) as primary metric
-            class_aps = []
-            class_precisions = []
-            class_recalls = []
-            class_f1s = []
+            # Store mean AP and class APs
+            mean_ap = results["mAP"]
+            class_aps = results["AP"]
 
-            for i in range(predictions.shape[1]):
-                class_preds = predictions[:, i]
-                class_labels = labels[:, i]
-
-                # Skip if no positive samples
-                if np.sum(class_labels) == 0:
-                    continue
-
-                # Calculate Average Precision (equivalent to mAP per class)
-                ap = average_precision_score(class_labels, class_preds)
-                class_aps.append(ap)
-
-                # Calculate metrics with fixed threshold (0.5) for consistency
-                binary_preds = (class_preds > 0.5).astype(int)
-                precision = precision_score(class_labels, binary_preds, zero_division=0)
-                recall = recall_score(class_labels, binary_preds, zero_division=0)
-                f1 = f1_score(class_labels, binary_preds, zero_division=0)
-
-                class_precisions.append(precision)
-                class_recalls.append(recall)
-                class_f1s.append(f1)
-
-            # Calculate mean metrics
-            mean_ap = np.mean(class_aps) if class_aps else 0.0
-            mean_precision = np.mean(class_precisions) if class_precisions else 0.0
-            mean_recall = np.mean(class_recalls) if class_recalls else 0.0
-            mean_f1 = np.mean(class_f1s) if class_f1s else 0.0
-
-            # Store metrics
-            task_metrics[task] = {
-                "mAP": mean_ap,
-                "precision": mean_precision,
-                "recall": mean_recall,
-                "f1": mean_f1,
-            }
+            # Initialize task metrics
+            task_metrics[task] = {"mAP": mean_ap, "per_class": {}}
 
             # Log the results
             self.logger.info(f"{task.upper()} METRICS:")
-            self.logger.info(f"  mAP: {mean_ap:.4f}")
-            self.logger.info(f"  Precision: {mean_precision:.4f}")
-            self.logger.info(f"  Recall: {mean_recall:.4f}")
-            self.logger.info(f"  F1-Score: {mean_f1:.4f}")
+            self.logger.info(f"  Overall mAP: {mean_ap:.4f}")
 
-        # Return mAP for each task for compatibility with existing code
+            # Store and log per-class metrics
+            for i in range(len(class_aps)):
+
+                # Get the class name based on the component
+                if task == "triplet":
+                    original_id = self.val_loader.dataset.index_to_triplet[i]
+                    label_name = self.label_mappings[task].get(
+                        original_id, f"Class_{original_id}"
+                    )
+                else:
+                    label_name = self.label_mappings[task].get(i, f"Class_{i}")
+
+                # Store AP for this class
+                task_metrics[task]["per_class"][label_name] = {"AP": class_aps[i]}
+                # Log per-class AP
+                self.logger.info(f"  {label_name}:")
+                self.logger.info(f"    AP: {class_aps[i]:.4f}")
+
         return {task: metrics["mAP"] for task, metrics in task_metrics.items()}
 
-    def train(self):
+    def train(self, train_components=False):
         """
         Execute training with curriculum learning approach
 
@@ -614,7 +678,27 @@ class MultiTaskSelfDistillationTrainer:
         self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
         self.logger.info("-" * 50)
 
-        # Train the teacher model
+        if train_components:
+            # Phase 1: Train component tasks only
+            self.logger.info("Training component tasks for the teacher model...")
+
+            # Freeze the triplet head parameters to prevent updates
+            for param in self.teacher_model.triplet_head.parameters():
+                param.requires_grad = False
+
+            for param in self.teacher_model.attention_module.parameters():
+                param.requires_grad = False
+
+            self._train_model_components(self.teacher_model, self.teacher_optimizer)
+
+            # Unfreeze triplet head and attention module after component training
+            for param in self.teacher_model.triplet_head.parameters():
+                param.requires_grad = True
+
+            for param in self.teacher_model.attention_module.parameters():
+                param.requires_grad = True
+
+        # Phase 2: Train the whole teacher model
         self._train_model(
             self.teacher_model,
             self.teacher_optimizer,
@@ -641,6 +725,23 @@ class MultiTaskSelfDistillationTrainer:
             p.numel() for p in self.student_model.parameters() if p.requires_grad
         )
         self.logger.info(f"Trainable parameters: {trainable_params_student:,}")
+
+        if train_components:
+            # Freeze the triplet head parameters to prevent updates
+            for param in self.student_model.triplet_head.parameters():
+                param.requires_grad = False
+
+            for param in self.student_model.attention_module.parameters():
+                param.requires_grad = False
+
+            self._train_model_components(self.student_model, self.student_optimizer)
+
+            # Unfreeze triplet head and attention module after component training
+            for param in self.student_model.triplet_head.parameters():
+                param.requires_grad = True
+
+            for param in self.student_model.attention_module.parameters():
+                param.requires_grad = True
 
         # Train the full student model
         self._train_model(
