@@ -376,12 +376,19 @@ def create_thesis_analysis():
         print(f"High mAP, low training volume: {best_efficient[0]}")
         print(f"  Training volume: {best_efficient[1]}, mAP: {best_efficient[2]:.3f}")
 
+    # if low_perf_high_vol:
+    #     worst_inefficient = min(low_perf_high_vol, key=lambda x: x[2])
+    #     print(f"Low mAP, high training volume: {worst_inefficient[0]}")
+    #     print(
+    #         f"  Training volume: {worst_inefficient[1]}, mAP: {worst_inefficient[2]:.3f}"
+    #     )
+
     if low_perf_high_vol:
-        worst_inefficient = min(low_perf_high_vol, key=lambda x: x[2])
-        print(f"Low mAP, high training volume: {worst_inefficient[0]}")
-        print(
-            f"  Training volume: {worst_inefficient[1]}, mAP: {worst_inefficient[2]:.3f}"
-        )
+        # Sort by mAP ascending to get worst performances
+        worst_inefficient = sorted(low_perf_high_vol, key=lambda x: x[2])[:10]
+        for model in worst_inefficient:
+            print(f"Low mAP, high training volume: {model[0]}")
+            print(f"  Training volume: {model[1]}, mAP: {model[2]:.3f}")
 
 
 if __name__ == "__main__":

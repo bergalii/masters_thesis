@@ -233,7 +233,7 @@ class ModelValidator:
         }
 
         print("-" * 50)
-        print("\nGlobal Validation Results (ivtmetrics library):")
+        print("\nGlobal Validation Results:")
         for task in ["verb", "instrument", "target", "triplet"]:
             print(f"{task.capitalize()} Results:")
             print(f"Global mAP: {global_results[task]['mAP']:.4f}")

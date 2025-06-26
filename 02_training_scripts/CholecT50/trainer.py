@@ -628,43 +628,43 @@ class MultiTaskSelfDistillationTrainer:
             train_components: Boolean flag to enable/disable component training phase
         """
 
-        self.logger.info("Training teacher model...")
-        total_trainable_params = sum(
-            p.numel() for p in self.teacher_model.parameters() if p.requires_grad
-        )
-        self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
-        self.logger.info("-" * 50)
+        # self.logger.info("Training teacher model...")
+        # total_trainable_params = sum(
+        #     p.numel() for p in self.teacher_model.parameters() if p.requires_grad
+        # )
+        # self.logger.info(f"Trainable parameters: {total_trainable_params:,}")
+        # self.logger.info("-" * 50)
 
-        if train_components:
-            # Phase 1: Train component tasks only
-            self.logger.info("Training component tasks for the teacher model...")
+        # if train_components:
+        #     # Phase 1: Train component tasks only
+        #     self.logger.info("Training component tasks for the teacher model...")
 
-            # Freeze the triplet head parameters to prevent updates
-            for param in self.teacher_model.triplet_head.parameters():
-                param.requires_grad = False
+        #     # Freeze the triplet head parameters to prevent updates
+        #     for param in self.teacher_model.triplet_head.parameters():
+        #         param.requires_grad = False
 
-            for param in self.teacher_model.attention_module.parameters():
-                param.requires_grad = False
+        #     for param in self.teacher_model.attention_module.parameters():
+        #         param.requires_grad = False
 
-            self._train_model_components(self.teacher_model, self.teacher_optimizer)
+        #     self._train_model_components(self.teacher_model, self.teacher_optimizer)
 
-            # Unfreeze triplet head and attention module after component training
-            for param in self.teacher_model.triplet_head.parameters():
-                param.requires_grad = True
+        #     # Unfreeze triplet head and attention module after component training
+        #     for param in self.teacher_model.triplet_head.parameters():
+        #         param.requires_grad = True
 
-            for param in self.teacher_model.attention_module.parameters():
-                param.requires_grad = True
+        #     for param in self.teacher_model.attention_module.parameters():
+        #         param.requires_grad = True
 
-        # Phase 2: Train the whole teacher model
-        self._train_model(
-            self.teacher_model,
-            self.teacher_optimizer,
-            self.teacher_scheduler,
-            "teacher",
-        )
+        # # Phase 2: Train the whole teacher model
+        # self._train_model(
+        #     self.teacher_model,
+        #     self.teacher_optimizer,
+        #     self.teacher_scheduler,
+        #     "teacher",
+        # )
 
         # After teacher training completes, load the best teacher model for distillation
-        best_teacher_path = f"{self.dir_name}/best_model_teacher.pth"
+        # best_teacher_path = f"{self.dir_name}/best_model_teacher.pth"
         best_teacher_path = (
             "04_models_dir/training_20250505_211505/best_model_teacher.pth"
         )

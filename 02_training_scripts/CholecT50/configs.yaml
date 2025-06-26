@@ -13,7 +13,7 @@ attention_module_common_dim: 256
 hidden_layer_dim: 512
 warmup_epochs: 5 # number of epochs
 consistency_loss_weight: 0.0
-temperature: 3.0
+temperature: 2.0
 gradient_clipping: 5.0
 sgd_momentum: 0.9 
 guidance_scale: 0.0 # changable during inference
